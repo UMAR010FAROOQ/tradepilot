@@ -1,5 +1,7 @@
-import { Bell, ChevronDown, Menu, Search } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { Bell, ChevronDown, LogOut, Menu, Search, UserRound } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import useAuth from '../../hooks/useAuth.js'
 import Button from '../common/Button.jsx'
 
 const pageTitles = {
@@ -21,9 +23,41 @@ const pageTitles = {
   '/admin/withdrawals': 'Withdrawals',
 }
 
+function getInitials(name, email) {
+  if (name) {
+    return name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0))
+      .join('')
+      .toUpperCase()
+  }
+
+  return email?.slice(0, 2).toUpperCase() || 'TP'
+}
+
 function Navbar({ onMenuClick }) {
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+  const { currentUser, userProfile, logout } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const pageTitle = pageTitles[pathname] || 'TradePilot'
+  const displayName = userProfile?.fullName || 'TradePilot user'
+  const email = userProfile?.email || currentUser?.email || ''
+  const initials = getInitials(userProfile?.fullName, email)
+
+  const handleLogout = async () => {
+    setLogoutError('')
+
+    try {
+      await logout()
+      navigate('/login', { replace: true })
+    } catch {
+      setLogoutError('Unable to log out. Please try again.')
+    }
+  }
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex h-18 items-center border-b border-border bg-canvas/90 px-4 backdrop-blur-xl md:left-18 md:px-5 xl:left-60 xl:px-7">
@@ -77,20 +111,54 @@ function Navbar({ onMenuClick }) {
           <Bell aria-hidden="true" className="size-[18px]" />
           <span className="absolute right-2 top-2 size-1.5 rounded-full bg-negative" />
         </Button>
-        <button
-          aria-label="Open account menu"
-          className="flex cursor-pointer items-center gap-2 rounded-lg p-1 transition hover:bg-elevated"
-          type="button"
-        >
-          <span className="grid size-8 place-items-center rounded-lg bg-accent/15 text-xs font-bold text-accent">
-            TP
-          </span>
-          <span className="hidden text-left xl:block">
-            <span className="block text-xs font-semibold text-foreground">Demo Account</span>
-            <span className="block text-[10px] text-muted">Standard</span>
-          </span>
-          <ChevronDown aria-hidden="true" className="hidden size-3.5 text-muted xl:block" />
-        </button>
+        <div className="relative">
+          <button
+            aria-controls="account-menu"
+            aria-expanded={isAccountMenuOpen}
+            aria-label="Open account menu"
+            className="flex cursor-pointer items-center gap-2 rounded-lg p-1 transition hover:bg-elevated"
+            onClick={() => setIsAccountMenuOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            <span className="grid size-8 place-items-center rounded-lg bg-accent/15 text-xs font-bold text-accent">
+              {initials}
+            </span>
+            <span className="hidden max-w-36 text-left xl:block">
+              <span className="block truncate text-xs font-semibold text-foreground">{displayName}</span>
+              <span className="block truncate text-[10px] text-muted">{email}</span>
+            </span>
+            <ChevronDown aria-hidden="true" className="hidden size-3.5 text-muted xl:block" />
+          </button>
+
+          {isAccountMenuOpen && (
+            <div
+              className="absolute right-0 top-12 w-64 rounded-xl border border-border bg-elevated p-2 shadow-panel"
+              id="account-menu"
+            >
+              <div className="border-b border-border px-3 py-2.5">
+                <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
+                <p className="mt-0.5 truncate text-xs text-muted">{email}</p>
+              </div>
+              <Link
+                className="mt-1 flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-muted transition hover:bg-surface hover:text-foreground"
+                onClick={() => setIsAccountMenuOpen(false)}
+                to="/profile"
+              >
+                <UserRound aria-hidden="true" className="size-4" />
+                Profile
+              </Link>
+              <button
+                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-negative transition hover:bg-negative/10"
+                onClick={handleLogout}
+                type="button"
+              >
+                <LogOut aria-hidden="true" className="size-4" />
+                Log out
+              </button>
+              {logoutError && <p className="px-3 py-2 text-xs text-negative">{logoutError}</p>}
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )

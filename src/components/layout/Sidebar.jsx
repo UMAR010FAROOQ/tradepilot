@@ -13,7 +13,8 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import useAuth from '../../hooks/useAuth.js'
 import { cn } from '../../utils/cn.js'
 import Button from '../common/Button.jsx'
 
@@ -54,6 +55,19 @@ function BrandMark() {
 }
 
 function Sidebar({ mobile = false, onClose, className }) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      onClose?.()
+      navigate('/login', { replace: true })
+    } catch {
+      // The authenticated shell remains visible so the user can retry.
+    }
+  }
+
   return (
     <aside
       aria-label="Main navigation"
@@ -128,6 +142,7 @@ function Sidebar({ mobile = false, onClose, className }) {
         <Button
           aria-label="Log out"
           className={cn('w-full', !mobile && 'px-0 xl:justify-start xl:px-3')}
+          onClick={handleLogout}
           title="Log out"
           variant="ghost"
         >
