@@ -10,13 +10,234 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     function hasExactFields(requiredFields) {
       return request.resource.data.keys().hasAll(requiredFields) &&
         request.resource.data.keys().hasOnly(requiredFields);
     }
 
+    function validCompletedTransaction(transactionId) {
+      let transactionData = request.resource.data;
+      let walletBefore = get(
+        /databases/$(database)/documents/wallets/$(transactionData.userId)
+      ).data;
+      let walletAfter = getAfter(
+        /databases/$(database)/documents/wallets/$(transactionData.userId)
+      ).data;
+      return hasExactFields([
+          'userId',
+          'type',
+          'amount',
+          'currency',
+          'status',
+          'referenceId',
+          'createdAt'
+        ]) &&
+        transactionData.userId is string &&
+        transactionData.amount is number &&
+        transactionData.amount > 0 &&
+        transactionData.currency == 'USD' &&
+        transactionData.status == 'completed' &&
+        transactionData.type in ['deposit', 'withdrawal'] &&
+        transactionData.createdAt == request.time &&
+        walletAfter.lastTransactionId == transactionId &&
+        (
+          (
+            transactionData.type == 'deposit' &&
+            get(
+              /databases/$(database)/documents/deposits/$(transactionData.referenceId)
+            ).data.status == 'pending' &&
+            getAfter(
+              /databases/$(database)/documents/deposits/$(transactionData.referenceId)
+            ).data.status == 'approved' &&
+            getAfter(
+              /databases/$(database)/documents/deposits/$(transactionData.referenceId)
+            ).data.userId == transactionData.userId &&
+            getAfter(
+              /databases/$(database)/documents/deposits/$(transactionData.referenceId)
+            ).data.amount == transactionData.amount &&
+            walletAfter.availableBalance ==
+              walletBefore.availableBalance + transactionData.amount &&
+            walletAfter.totalDeposited ==
+              walletBefore.totalDeposited + transactionData.amount &&
+            walletAfter.totalWithdrawn == walletBefore.totalWithdrawn
+          ) ||
+          (
+            transactionData.type == 'withdrawal' &&
+            get(
+              /databases/$(database)/documents/withdrawals/$(transactionData.referenceId)
+            ).data.status == 'pending' &&
+            getAfter(
+              /databases/$(database)/documents/withdrawals/$(transactionData.referenceId)
+            ).data.status == 'approved' &&
+            getAfter(
+              /databases/$(database)/documents/withdrawals/$(transactionData.referenceId)
+            ).data.userId == transactionData.userId &&
+            getAfter(
+              /databases/$(database)/documents/withdrawals/$(transactionData.referenceId)
+            ).data.amount == transactionData.amount &&
+            walletBefore.availableBalance >= transactionData.amount &&
+            walletAfter.availableBalance ==
+              walletBefore.availableBalance - transactionData.amount &&
+            walletAfter.totalWithdrawn ==
+              walletBefore.totalWithdrawn + transactionData.amount &&
+            walletAfter.totalDeposited == walletBefore.totalDeposited
+          )
+        );
+    }
+
+    function validWalletApprovalUpdate(userId) {
+      let transactionId = request.resource.data.lastTransactionId;
+      let transactionAfter = getAfter(
+        /databases/$(database)/documents/transactions/$(transactionId)
+      ).data;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'availableBalance',
+          'totalDeposited',
+          'totalWithdrawn',
+          'updatedAt',
+          'lastTransactionId'
+        ]) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.currency == resource.data.currency &&
+        request.resource.data.lockedBalance == resource.data.lockedBalance &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.availableBalance is number &&
+        request.resource.data.availableBalance >= 0 &&
+        request.resource.data.totalDeposited is number &&
+        request.resource.data.totalWithdrawn is number &&
+        request.resource.data.updatedAt == request.time &&
+        transactionAfter.userId == userId &&
+        transactionAfter.amount > 0 &&
+        (
+          (
+            transactionAfter.type == 'deposit' &&
+            get(
+              /databases/$(database)/documents/deposits/$(transactionAfter.referenceId)
+            ).data.status == 'pending' &&
+            getAfter(
+              /databases/$(database)/documents/deposits/$(transactionAfter.referenceId)
+            ).data.status == 'approved' &&
+            request.resource.data.availableBalance ==
+              resource.data.availableBalance + transactionAfter.amount &&
+            request.resource.data.totalDeposited ==
+              resource.data.totalDeposited + transactionAfter.amount &&
+            request.resource.data.totalWithdrawn == resource.data.totalWithdrawn
+          ) ||
+          (
+            transactionAfter.type == 'withdrawal' &&
+            get(
+              /databases/$(database)/documents/withdrawals/$(transactionAfter.referenceId)
+            ).data.status == 'pending' &&
+            getAfter(
+              /databases/$(database)/documents/withdrawals/$(transactionAfter.referenceId)
+            ).data.status == 'approved' &&
+            resource.data.availableBalance >= transactionAfter.amount &&
+            request.resource.data.availableBalance ==
+              resource.data.availableBalance - transactionAfter.amount &&
+            request.resource.data.totalWithdrawn ==
+              resource.data.totalWithdrawn + transactionAfter.amount &&
+            request.resource.data.totalDeposited == resource.data.totalDeposited
+          )
+        );
+    }
+
+    function validDepositApproval(depositId) {
+      let walletAfter = getAfter(
+        /databases/$(database)/documents/wallets/$(resource.data.userId)
+      ).data;
+      let transactionAfter = getAfter(
+        /databases/$(database)/documents/transactions/$(walletAfter.lastTransactionId)
+      ).data;
+      return resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'approvedBy',
+          'approvedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status == 'approved' &&
+        request.resource.data.approvedBy == request.auth.uid &&
+        request.resource.data.approvedAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        transactionAfter.type == 'deposit' &&
+        transactionAfter.referenceId == depositId &&
+        transactionAfter.userId == resource.data.userId &&
+        transactionAfter.amount == resource.data.amount &&
+        transactionAfter.currency == resource.data.currency &&
+        transactionAfter.status == 'completed';
+    }
+
+    function validDepositRejection() {
+      return resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'rejectionReason',
+          'rejectedBy',
+          'rejectedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status == 'rejected' &&
+        request.resource.data.rejectionReason is string &&
+        request.resource.data.rejectionReason.size() > 0 &&
+        request.resource.data.rejectedBy == request.auth.uid &&
+        request.resource.data.rejectedAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+    }
+
+    function validWithdrawalApproval(withdrawalId) {
+      let walletBefore = get(
+        /databases/$(database)/documents/wallets/$(resource.data.userId)
+      ).data;
+      let walletAfter = getAfter(
+        /databases/$(database)/documents/wallets/$(resource.data.userId)
+      ).data;
+      let transactionAfter = getAfter(
+        /databases/$(database)/documents/transactions/$(walletAfter.lastTransactionId)
+      ).data;
+      return resource.data.status == 'pending' &&
+        walletBefore.availableBalance >= resource.data.amount &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'approvedBy',
+          'approvedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status == 'approved' &&
+        request.resource.data.approvedBy == request.auth.uid &&
+        request.resource.data.approvedAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        transactionAfter.type == 'withdrawal' &&
+        transactionAfter.referenceId == withdrawalId &&
+        transactionAfter.userId == resource.data.userId &&
+        transactionAfter.amount == resource.data.amount &&
+        transactionAfter.currency == resource.data.currency &&
+        transactionAfter.status == 'completed';
+    }
+
+    function validWithdrawalRejection() {
+      return resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'rejectionReason',
+          'rejectedBy',
+          'rejectedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status == 'rejected' &&
+        request.resource.data.rejectionReason is string &&
+        request.resource.data.rejectionReason.size() > 0 &&
+        request.resource.data.rejectedBy == request.auth.uid &&
+        request.resource.data.rejectedAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+    }
+
     match /users/{userId} {
-      allow read: if ownsDocument(userId);
+      allow read: if ownsDocument(userId) || isAdmin();
 
       allow create: if ownsDocument(userId) &&
         hasExactFields([
@@ -45,7 +266,7 @@ service cloud.firestore {
     }
 
     match /wallets/{userId} {
-      allow read: if ownsDocument(userId);
+      allow read: if ownsDocument(userId) || isAdmin();
 
       allow create: if ownsDocument(userId) &&
         hasExactFields([
@@ -66,6 +287,8 @@ service cloud.firestore {
         request.resource.data.totalWithdrawn == 0 &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
+
+      allow update: if isAdmin() && validWalletApprovalUpdate(userId);
     }
 
     match /positions/{positionId} {
@@ -73,11 +296,12 @@ service cloud.firestore {
     }
 
     match /transactions/{transactionId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isAdmin() && validCompletedTransaction(transactionId);
     }
 
     match /deposits/{depositId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
 
       allow create: if signedIn() &&
         hasExactFields([
@@ -102,10 +326,13 @@ service cloud.firestore {
         request.resource.data.status == 'pending' &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
+
+      allow update: if isAdmin() &&
+        (validDepositApproval(depositId) || validDepositRejection());
     }
 
     match /withdrawals/{withdrawalId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
 
       allow create: if signedIn() &&
         hasExactFields([
@@ -133,6 +360,9 @@ service cloud.firestore {
         request.resource.data.status == 'pending' &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
+
+      allow update: if isAdmin() &&
+        (validWithdrawalApproval(withdrawalId) || validWithdrawalRejection());
     }
 
     match /watchlists/{userId} {

@@ -1,9 +1,11 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx'
+import AdminRoute from './components/auth/AdminRoute.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { WalletProvider } from './context/WalletContext.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
+import AdminLayout from './layouts/AdminLayout.jsx'
 import Landing from './pages/Landing.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
@@ -25,6 +27,7 @@ import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminUsers from './pages/admin/Users.jsx'
 import AdminDeposits from './pages/admin/Deposits.jsx'
 import AdminWithdrawals from './pages/admin/Withdrawals.jsx'
+import AdminTransactions from './pages/admin/Transactions.jsx'
 
 function App() {
   return (
@@ -54,10 +57,16 @@ function App() {
               <Route path="profile" element={<Profile />} />
               <Route path="security" element={<Security />} />
               <Route path="support" element={<Support />} />
+            </Route>
+          </Route>
+
+          <Route element={<AdminRoute />}>
+            <Route element={<AdminLayout />}>
               <Route path="admin" element={<AdminDashboard />} />
               <Route path="admin/users" element={<AdminUsers />} />
               <Route path="admin/deposits" element={<AdminDeposits />} />
               <Route path="admin/withdrawals" element={<AdminWithdrawals />} />
+              <Route path="admin/transactions" element={<AdminTransactions />} />
             </Route>
           </Route>
 

@@ -9,6 +9,12 @@ const firestoreErrorMessages = {
   'validation/missing-method': 'Select a payment method.',
   'validation/missing-destination': 'Enter a withdrawal destination.',
   'validation/missing-reference': 'Enter a reference or transaction ID.',
+  'validation/missing-reason': 'Enter a reason before rejecting this request.',
+  'admin/unauthorized': 'Administrator access is required for this action.',
+  'admin/request-missing': 'This request no longer exists.',
+  'admin/request-processed': 'This request has already been processed.',
+  'admin/wallet-missing': 'The user wallet could not be found.',
+  'admin/insufficient-balance': 'The wallet no longer has enough available balance.',
 }
 
 export function getFirestoreErrorMessage(error) {
