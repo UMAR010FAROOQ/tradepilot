@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../services/firebase.js'
 import * as authService from '../services/authService.js'
+import { initializeUserAccount } from '../services/accountService.js'
 
 const AuthContext = createContext(undefined)
 const profileCache = new Map()
@@ -87,6 +88,10 @@ function AuthProvider({ children }) {
       } finally {
         if (isActive) setLoading(false)
       }
+
+      initializeUserAccount(user).catch(() => {
+        // WalletContext exposes a recoverable missing-wallet error if setup remains incomplete.
+      })
     })
 
     return () => {
@@ -102,17 +107,26 @@ function AuthProvider({ children }) {
       loading,
       signup: async (email, password, fullName) => {
         const credential = await authService.signup(email, password)
-        const profile = await authService.createUserProfile(credential.user, fullName)
-        const resolvedProfile = {
-          ...profile,
-          createdAt: null,
-          updatedAt: null,
-        }
-
-        profileCache.set(credential.user.uid, resolvedProfile)
         setCurrentUser(credential.user)
-        setUserProfile(resolvedProfile)
-        return credential
+
+        try {
+          const profile = await authService.createUserProfile(credential.user, fullName)
+          const resolvedProfile = {
+            ...profile,
+            createdAt: null,
+            updatedAt: null,
+          }
+
+          profileCache.set(credential.user.uid, resolvedProfile)
+          setUserProfile(resolvedProfile)
+          await initializeUserAccount(credential.user)
+          return credential
+        } catch (error) {
+          const setupError = new Error('The authentication account exists, but setup is incomplete.')
+          setupError.code = 'account/initialization-failed'
+          setupError.cause = error
+          throw setupError
+        }
       },
       login: async (email, password) => {
         const credential = await authService.login(email, password)
@@ -124,6 +138,19 @@ function AuthProvider({ children }) {
         await authService.logout()
       },
       resetPassword: authService.resetPassword,
+      initializeAccount: async (fullName) => {
+        if (!currentUser) {
+          const error = new Error('A signed-in user is required to initialize an account.')
+          error.code = 'account/initialization-failed'
+          throw error
+        }
+
+        const profile = await authService.ensureUserProfile(currentUser, fullName)
+        await initializeUserAccount(currentUser)
+        profileCache.set(currentUser.uid, profile)
+        setUserProfile(profile)
+        return profile
+      },
     }),
     [currentUser, loading, userProfile],
   )

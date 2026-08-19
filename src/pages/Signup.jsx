@@ -5,6 +5,7 @@ import Button from '../components/common/Button.jsx'
 import Input from '../components/common/Input.jsx'
 import useAuth from '../hooks/useAuth.js'
 import { getFirebaseErrorMessage } from '../utils/firebaseErrors.js'
+import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -32,14 +33,15 @@ function Signup() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { currentUser, loading, signup } = useAuth()
+  const [needsRecovery, setNeedsRecovery] = useState(false)
+  const { currentUser, loading, signup, initializeAccount } = useAuth()
   const navigate = useNavigate()
 
   if (loading) {
     return <p className="py-10 text-center text-sm text-muted">Checking your session…</p>
   }
 
-  if (currentUser && !error) return <Navigate replace to="/dashboard" />
+  if (currentUser && !error && !isSubmitting) return <Navigate replace to="/dashboard" />
 
   const updateField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -60,7 +62,26 @@ function Signup() {
       await signup(form.email.trim(), form.password, form.fullName)
       navigate('/dashboard', { replace: true })
     } catch (firebaseError) {
-      setError(getFirebaseErrorMessage(firebaseError))
+      setNeedsRecovery(firebaseError?.code === 'account/initialization-failed')
+      setError(
+        firebaseError?.code?.startsWith('auth/')
+          ? getFirebaseErrorMessage(firebaseError)
+          : getFirestoreErrorMessage(firebaseError),
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleRecovery = async () => {
+    setIsSubmitting(true)
+    setError('')
+
+    try {
+      await initializeAccount(form.fullName)
+      navigate('/dashboard', { replace: true })
+    } catch (setupError) {
+      setError(getFirestoreErrorMessage(setupError))
     } finally {
       setIsSubmitting(false)
     }
@@ -84,7 +105,25 @@ function Signup() {
         </div>
       )}
 
-      <form className="grid gap-4" noValidate onSubmit={handleSubmit}>
+      {needsRecovery && currentUser && (
+        <div className="mb-5 rounded-lg border border-warning/25 bg-warning/10 p-4">
+          <p className="text-sm text-warning">
+            Your login was created. Retry the Firestore profile and wallet setup without creating another account.
+          </p>
+          <Button
+            className="mt-3"
+            disabled={isSubmitting}
+            onClick={handleRecovery}
+            size="sm"
+            variant="secondary"
+          >
+            {isSubmitting && <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />}
+            Retry account setup
+          </Button>
+        </div>
+      )}
+
+      <form className="grid gap-4" hidden={needsRecovery && Boolean(currentUser)} noValidate onSubmit={handleSubmit}>
         <Input
           autoComplete="name"
           error={fieldErrors.fullName}

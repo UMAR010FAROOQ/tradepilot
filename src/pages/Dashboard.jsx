@@ -1,47 +1,19 @@
 import {
   ArrowDownLeft,
+  ArrowDownToLine,
   ArrowUpRight,
-  BriefcaseBusiness,
   CircleDollarSign,
-  Landmark,
+  LockKeyhole,
   Plus,
   WalletCards,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import Badge from '../components/common/Badge.jsx'
 import Button from '../components/common/Button.jsx'
 import Card from '../components/common/Card.jsx'
 import PageHeader from '../components/common/PageHeader.jsx'
-
-const metrics = [
-  {
-    label: 'Total balance',
-    value: '$24,860.40',
-    detail: '+2.8% this month',
-    trend: 'positive',
-    icon: WalletCards,
-  },
-  {
-    label: 'Portfolio value',
-    value: '$18,420.65',
-    detail: '+$428.30 today',
-    trend: 'positive',
-    icon: BriefcaseBusiness,
-  },
-  {
-    label: 'Available cash',
-    value: '$6,439.75',
-    detail: 'Ready to use',
-    trend: 'neutral',
-    icon: CircleDollarSign,
-  },
-  {
-    label: 'Open positions',
-    value: '7',
-    detail: '3 forex · 4 crypto',
-    trend: 'neutral',
-    icon: Landmark,
-  },
-]
+import useWallet from '../hooks/useWallet.js'
+import { formatCurrency } from '../utils/formatCurrency.js'
 
 const activities = [
   { label: 'BTC position adjusted', time: '12 minutes ago', value: '+$184.20', positive: true },
@@ -57,12 +29,48 @@ const watchlist = [
 ]
 
 function Dashboard() {
+  const { wallet, loading: walletLoading, error: walletError } = useWallet()
+  const navigate = useNavigate()
+  const currency = wallet?.currency || 'USD'
+  const metrics = [
+    {
+      label: 'Total balance',
+      value: wallet
+        ? formatCurrency(wallet.availableBalance + wallet.lockedBalance, currency)
+        : 'Unavailable',
+      detail: 'Available plus locked funds',
+      icon: WalletCards,
+    },
+    {
+      label: 'Available balance',
+      value: wallet ? formatCurrency(wallet.availableBalance, currency) : 'Unavailable',
+      detail: 'Funds currently available',
+      icon: CircleDollarSign,
+    },
+    {
+      label: 'Locked balance',
+      value: wallet ? formatCurrency(wallet.lockedBalance, currency) : 'Unavailable',
+      detail: 'Funds currently reserved',
+      icon: LockKeyhole,
+    },
+    {
+      label: 'Total deposited',
+      value: wallet ? formatCurrency(wallet.totalDeposited, currency) : 'Unavailable',
+      detail: 'Approved deposits only',
+      icon: ArrowDownToLine,
+    },
+  ]
+
   return (
     <div className="space-y-6">
       <PageHeader
         actions={
           <>
-            <Button className="hidden sm:inline-flex" variant="secondary">
+            <Button
+              className="hidden sm:inline-flex"
+              onClick={() => navigate('/deposit')}
+              variant="secondary"
+            >
               <ArrowDownLeft aria-hidden="true" className="size-4" />
               Deposit
             </Button>
@@ -77,18 +85,26 @@ function Dashboard() {
         title="Good morning"
       />
 
+      {walletError && (
+        <div className="rounded-lg border border-warning/25 bg-warning/10 px-4 py-3 text-sm text-warning">
+          {walletError}
+        </div>
+      )}
+
       <section aria-label="Account summary" className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-        {metrics.map(({ label, value, detail, trend, icon: Icon }) => (
+        {metrics.map(({ label, value, detail, icon: Icon }) => (
           <Card className="min-w-0" key={label}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted">{label}</p>
-                <p className="financial-value mt-3 truncate text-xl font-semibold text-foreground">
-                  {value}
-                </p>
-                <p className={`mt-2 text-xs ${trend === 'positive' ? 'text-positive' : 'text-muted'}`}>
-                  {detail}
-                </p>
+                {walletLoading ? (
+                  <span className="mt-3 block h-7 w-32 animate-pulse rounded bg-elevated" />
+                ) : (
+                  <p className="financial-value mt-3 truncate text-xl font-semibold text-foreground">
+                    {value}
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-muted">{detail}</p>
               </div>
               <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-elevated text-muted">
                 <Icon aria-hidden="true" className="size-4" />

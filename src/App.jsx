@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { WalletProvider } from './context/WalletContext.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import Landing from './pages/Landing.jsx'
@@ -29,7 +30,8 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <WalletProvider>
+          <Routes>
           <Route path="/" element={<Landing />} />
 
           <Route element={<AuthLayout />}>
@@ -60,7 +62,8 @@ function App() {
           </Route>
 
           <Route path="*" element={<NotFound />} />
-        </Routes>
+          </Routes>
+        </WalletProvider>
       </AuthProvider>
     </BrowserRouter>
   )

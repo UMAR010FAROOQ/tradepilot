@@ -4,7 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth'
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db } from './firebase.js'
 
 export function signup(email, password) {
@@ -36,4 +36,12 @@ export async function createUserProfile(user, fullName) {
 
   await setDoc(doc(db, 'users', user.uid), profile)
   return profile
+}
+
+export async function ensureUserProfile(user, fullName) {
+  const profileRef = doc(db, 'users', user.uid)
+  const snapshot = await getDoc(profileRef)
+
+  if (snapshot.exists()) return snapshot.data()
+  return createUserProfile(user, fullName)
 }
