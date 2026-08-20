@@ -28,17 +28,7 @@ export async function getUsers() {
 }
 
 export const getDeposits = () => orderedCollection('deposits')
-export async function getWithdrawals() {
-  const [withdrawals, walletsSnapshot] = await Promise.all([
-    orderedCollection('withdrawals'),
-    getDocs(collection(db, 'wallets')),
-  ])
-  const wallets = new Map(records(walletsSnapshot).map((wallet) => [wallet.userId, wallet]))
-  return withdrawals.map((item) => ({
-    ...item,
-    availableBalance: wallets.get(item.userId)?.availableBalance ?? null,
-  }))
-}
+export const getWithdrawals = () => orderedCollection('withdrawals')
 export const getTransactions = () => orderedCollection('transactions')
 
 export async function getPendingDeposits() {

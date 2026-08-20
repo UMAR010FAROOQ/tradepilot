@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   ArrowDownLeft,
   ArrowDownToLine,
@@ -12,7 +13,10 @@ import Badge from '../components/common/Badge.jsx'
 import Button from '../components/common/Button.jsx'
 import Card from '../components/common/Card.jsx'
 import PageHeader from '../components/common/PageHeader.jsx'
+import MarketCard from '../components/trading/MarketCard.jsx'
+import useAuth from '../hooks/useAuth.js'
 import useWallet from '../hooks/useWallet.js'
+import { getTicker, marketDataSource } from '../services/marketService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 
 const activities = [
@@ -28,9 +32,14 @@ const watchlist = [
   { symbol: 'GBP/JPY', price: '201.485', change: '+0.12%', positive: true },
 ]
 
+const overviewSymbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD']
+
 function Dashboard() {
+  const { currentUser, userProfile } = useAuth()
   const { wallet, loading: walletLoading, error: walletError } = useWallet()
+  const [marketTickers, setMarketTickers] = useState([])
   const navigate = useNavigate()
+  const firstName = (userProfile?.fullName || currentUser?.displayName || '').trim().split(/\s+/)[0]
   const currency = wallet?.currency || 'USD'
   const metrics = [
     {
@@ -61,6 +70,12 @@ function Dashboard() {
     },
   ]
 
+  useEffect(() => {
+    let active = true
+    Promise.all(overviewSymbols.map(getTicker)).then((values) => active && setMarketTickers(values))
+    return () => { active = false }
+  }, [])
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -82,7 +97,7 @@ function Dashboard() {
         }
         description="A concise view of your account and market activity."
         eyebrow="Overview"
-        title="Good morning"
+        title={`Good morning${firstName ? `, ${firstName}` : ''}`}
       />
 
       {walletError && (
@@ -112,6 +127,16 @@ function Dashboard() {
             </div>
           </Card>
         ))}
+      </section>
+
+      <section aria-labelledby="market-overview-title">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div><h2 className="text-sm font-semibold" id="market-overview-title">Market overview</h2><p className="mt-1 text-xs text-muted">Crypto and forex · {marketDataSource}</p></div>
+          <Button onClick={() => navigate('/markets')} size="sm" variant="ghost">All markets</Button>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {['crypto', 'forex'].map((type) => <div key={type}><h3 className="mb-2 text-xs font-semibold capitalize text-muted">{type} market overview</h3><div className="grid gap-3 sm:grid-cols-2">{marketTickers.length ? marketTickers.filter((ticker) => ticker.type === type).map((ticker) => <MarketCard key={ticker.symbol} onClick={() => navigate(`/trade?symbol=${ticker.symbol}`)} ticker={ticker} />) : overviewSymbols.slice(type === 'crypto' ? 0 : 2, type === 'crypto' ? 2 : 4).map((symbol) => <span className="h-36 animate-pulse rounded-xl border border-border bg-surface" key={symbol} />)}</div></div>)}
+        </div>
       </section>
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(19rem,0.75fr)]">

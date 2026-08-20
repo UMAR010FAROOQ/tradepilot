@@ -1,0 +1,67 @@
+import { useEffect, useRef } from 'react'
+import { CandlestickSeries, ColorType, CrosshairMode, createChart } from 'lightweight-charts'
+import { marketBySymbol } from '../../data/markets.js'
+
+function TradingChart({ data, symbol, interval, className = '' }) {
+  const containerRef = useRef(null)
+  const chartRef = useRef(null)
+  const seriesRef = useRef(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return undefined
+
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: container.clientHeight,
+      layout: {
+        background: { type: ColorType.Solid, color: '#0d1117' },
+        textColor: '#8b98a8',
+        fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+      },
+      grid: {
+        vertLines: { color: '#18202b' },
+        horzLines: { color: '#18202b' },
+      },
+      crosshair: { mode: CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#202936', scaleMargins: { top: 0.12, bottom: 0.08 } },
+      timeScale: { borderColor: '#202936', timeVisible: true, secondsVisible: false, rightOffset: 6 },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+      handleScroll: { horzTouchDrag: true, mouseWheel: true, pressedMouseMove: true },
+    })
+    const series = chart.addSeries(CandlestickSeries, {
+      upColor: '#16c784', downColor: '#ea3943',
+      wickUpColor: '#16c784', wickDownColor: '#ea3943',
+      borderUpColor: '#16c784', borderDownColor: '#ea3943',
+    })
+    chartRef.current = chart
+    seriesRef.current = series
+
+    const observer = new ResizeObserver(() => chart.resize(container.clientWidth, container.clientHeight))
+    observer.observe(container)
+    return () => {
+      observer.disconnect()
+      chart.remove()
+      chartRef.current = null
+      seriesRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!seriesRef.current || !chartRef.current) return
+    const market = marketBySymbol.get(symbol)
+    const precision = market?.type === 'forex' ? (symbol.includes('JPY') ? 3 : 5) : undefined
+    if (precision) seriesRef.current.applyOptions({ priceFormat: { type: 'price', precision, minMove: 10 ** -precision } })
+    seriesRef.current.setData(data)
+    chartRef.current.timeScale().fitContent()
+  }, [data, symbol, interval])
+
+  return (
+    <div className={className}>
+      <div aria-label={`${symbol} ${interval} candlestick chart`} className="h-[420px] min-h-72 w-full" ref={containerRef} role="img" />
+      <p className="border-t border-border px-3 py-2 text-right text-[10px] text-muted">Charts powered by <a className="hover:text-foreground" href="https://www.tradingview.com/" rel="noreferrer" target="_blank">TradingView</a></p>
+    </div>
+  )
+}
+
+export default TradingChart

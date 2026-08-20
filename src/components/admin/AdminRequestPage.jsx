@@ -70,7 +70,7 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
         <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-[1fr_180px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <input aria-label={`Search ${plural.toLowerCase()}`} className="h-10 w-full rounded-lg border border-border bg-elevated pl-9 pr-3 text-sm outline-none focus:border-accent" onChange={(event) => setSearch(event.target.value)} placeholder="Search user, method or reference" value={search} />
+            <input aria-label={`Search ${plural.toLowerCase()}`} className="h-10 w-full rounded-lg border border-border bg-elevated pl-9 pr-3 text-sm outline-none focus:border-accent" onChange={(event) => setSearch(event.target.value)} placeholder="Search method, reference or destination" value={search} />
           </div>
           <Select aria-label="Filter status" onChange={(event) => setStatus(event.target.value)} value={status}>
             <option value="all">All statuses</option><option value="pending">Pending</option>
@@ -79,18 +79,16 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
         </div>
         {loading ? <AdminLoading /> : visible.length === 0 ? <AdminEmpty title={`No ${plural.toLowerCase()} found`} /> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[950px] text-left">
+            <table className="w-full min-w-[760px] text-left">
               <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted">
-                <tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Amount</th><th className="px-5 py-3">Method</th><th className="px-5 py-3">Reference / destination</th>{type === 'withdrawal' && <th className="px-5 py-3">Available balance</th>}<th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th><th className="px-5 py-3 text-right">Actions</th></tr>
+                <tr><th className="px-5 py-3">Amount</th><th className="px-5 py-3">Method</th><th className="px-5 py-3">Reference / destination</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th><th className="px-5 py-3 text-right">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {visible.map((item) => (
                   <tr key={item.id}>
-                    <td className="px-5 py-4 font-mono text-xs text-muted">{item.userId}</td>
                     <td className="financial-value px-5 py-4 text-sm font-semibold">{formatCurrency(item.amount, item.currency)}</td>
                     <td className="px-5 py-4 text-sm">{item.method}</td>
                     <td className="max-w-48 truncate px-5 py-4 text-xs text-muted" title={item.reference || item.destination}>{item.reference || item.destination}</td>
-                    {type === 'withdrawal' && <td className="financial-value px-5 py-4 text-sm">{item.availableBalance === null ? '—' : formatCurrency(item.availableBalance, item.currency)}</td>}
                     <td className="px-5 py-4"><Badge variant={statusVariant(item.status)}>{item.status}</Badge></td>
                     <td className="px-5 py-4 text-xs text-muted">{formatAdminDate(item.createdAt)}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2">{item.status === 'pending' ? <><Button onClick={() => setDialog({ action: 'approve', item })} size="sm" variant="success"><Check className="size-3.5" />Approve</Button><Button onClick={() => setDialog({ action: 'reject', item })} size="sm" variant="danger"><X className="size-3.5" />Reject</Button></> : <span className="text-xs text-muted">Processed</span>}</div></td>
