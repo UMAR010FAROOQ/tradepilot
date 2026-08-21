@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { CandlestickSeries, ColorType, CrosshairMode, createChart } from 'lightweight-charts'
 import { marketBySymbol } from '../../data/markets.js'
 
-function TradingChart({ data, symbol, interval, className = '' }) {
+function TradingChart({ data, symbol, interval, livePrice, className = '' }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const seriesRef = useRef(null)
@@ -55,6 +55,17 @@ function TradingChart({ data, symbol, interval, className = '' }) {
     seriesRef.current.setData(data)
     chartRef.current.timeScale().fitContent()
   }, [data, symbol, interval])
+
+  useEffect(() => {
+    const latest = data.at(-1)
+    if (!seriesRef.current || !latest || !Number.isFinite(livePrice)) return
+    seriesRef.current.update({
+      ...latest,
+      close: livePrice,
+      high: Math.max(latest.high, livePrice),
+      low: Math.min(latest.low, livePrice),
+    })
+  }, [data, livePrice])
 
   return (
     <div className={className}>

@@ -1,3 +1,11 @@
+import { marketBySymbol } from '../data/markets.js'
+import {
+  BINANCE_MARKET_SOURCE,
+  getBinanceHistoricalCandles,
+  getBinanceTicker,
+  getBinanceTickers,
+  subscribeToBinanceTicker,
+} from './binanceMarketService.js'
 import {
   getMockHistoricalCandles,
   getMockMarketSymbols,
@@ -6,15 +14,46 @@ import {
   subscribeToMockTicker,
 } from './mockMarketService.js'
 
-const provider = {
-  getMarketSymbols: getMockMarketSymbols,
-  getTicker: getMockTicker,
-  getHistoricalCandles: getMockHistoricalCandles,
-  subscribeToTicker: subscribeToMockTicker,
+const BULK_TICKER_TTL = 10000
+let bulkTickerPromise = null
+let bulkTickerExpiresAt = 0
+
+function marketFor(symbol) {
+  const market = marketBySymbol.get(symbol)
+  if (!market) throw new Error(`Unsupported market symbol: ${symbol}`)
+  return market
 }
 
-export const marketDataSource = MOCK_MARKET_SOURCE
-export const getMarketSymbols = () => provider.getMarketSymbols()
-export const getTicker = (symbol) => provider.getTicker(symbol)
-export const getHistoricalCandles = (symbol, interval) => provider.getHistoricalCandles(symbol, interval)
-export const subscribeToTicker = (symbol, callback) => provider.subscribeToTicker(symbol, callback)
+async function getCachedCryptoTickers() {
+  if (!bulkTickerPromise || Date.now() >= bulkTickerExpiresAt) {
+    bulkTickerExpiresAt = Date.now() + BULK_TICKER_TTL
+    bulkTickerPromise = getBinanceTickers().catch((error) => {
+      bulkTickerPromise = null
+      bulkTickerExpiresAt = 0
+      throw error
+    })
+  }
+  return bulkTickerPromise
+}
+
+export const marketSources = { crypto: BINANCE_MARKET_SOURCE, forex: MOCK_MARKET_SOURCE }
+export const getMarketSymbols = () => getMockMarketSymbols()
+
+export async function getTicker(symbol) {
+  const market = marketFor(symbol)
+  if (market.type === 'forex') return getMockTicker(symbol)
+  const tickers = await getCachedCryptoTickers()
+  return tickers.find((ticker) => ticker.symbol === symbol) || getBinanceTicker(symbol)
+}
+
+export function getHistoricalCandles(symbol, interval) {
+  return marketFor(symbol).type === 'crypto'
+    ? getBinanceHistoricalCandles(symbol, interval)
+    : getMockHistoricalCandles(symbol, interval)
+}
+
+export function subscribeToTicker(symbol, callback, onError, onStatus) {
+  return marketFor(symbol).type === 'crypto'
+    ? subscribeToBinanceTicker(symbol, callback, onError, onStatus)
+    : subscribeToMockTicker(symbol, callback, onError, onStatus)
+}

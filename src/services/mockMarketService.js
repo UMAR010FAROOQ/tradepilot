@@ -1,6 +1,6 @@
 import { marketBySymbol, markets } from '../data/markets.js'
 
-export const MOCK_MARKET_SOURCE = 'Demo Market Data'
+export const MOCK_MARKET_SOURCE = 'Demo Forex Data'
 
 const basePrices = {
   BTCUSDT: 68420, ETHUSDT: 3582, BNBUSDT: 612, SOLUSDT: 148, XRPUSDT: 0.526,
@@ -71,12 +71,14 @@ export async function getMockTicker(symbol) {
     low24h: Math.min(...candles.slice(-24).map((item) => item.low)),
     volume24h: candles.slice(-24).reduce((total, item) => total + item.volume, 0),
     source: MOCK_MARKET_SOURCE,
+    connectionStatus: 'demo',
   }
 }
 
-export function subscribeToMockTicker(symbol, callback) {
+export function subscribeToMockTicker(symbol, callback, onError, onStatus) {
   let active = true
-  const publish = () => getMockTicker(symbol).then((ticker) => active && callback(ticker))
+  onStatus?.('demo')
+  const publish = () => getMockTicker(symbol).then((ticker) => active && callback({ ...ticker, connectionStatus: 'demo' })).catch(onError)
   publish()
   const timer = window.setInterval(publish, 15000)
   return () => { active = false; window.clearInterval(timer) }

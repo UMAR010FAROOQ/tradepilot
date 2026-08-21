@@ -236,6 +236,151 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time;
     }
 
+    function closeEnough(actual, expected) {
+      return actual >= expected - 0.000001 && actual <= expected + 0.000001;
+    }
+
+    function validTradeShape(tradeId, tradeData) {
+      let positionId = tradeData.userId + '_' + tradeData.symbol;
+      let positionBefore = get(
+        /databases/$(database)/documents/positions/$(positionId)
+      ).data;
+      return tradeData.keys().hasAll([
+          'userId', 'symbol', 'marketType', 'side', 'quantity',
+          'executionPrice', 'grossAmount', 'fee', 'netAmount',
+          'realizedPnl', 'status', 'createdAt'
+        ]) &&
+        tradeData.keys().hasOnly([
+          'userId', 'symbol', 'marketType', 'side', 'quantity',
+          'executionPrice', 'grossAmount', 'fee', 'netAmount',
+          'realizedPnl', 'status', 'createdAt'
+        ]) &&
+        tradeData.userId == request.auth.uid &&
+        tradeData.symbol is string &&
+        tradeData.marketType in ['crypto', 'forex'] &&
+        tradeData.side in ['BUY', 'SELL'] &&
+        tradeData.quantity is number && tradeData.quantity > 0 &&
+        tradeData.executionPrice is number && tradeData.executionPrice > 0 &&
+        tradeData.grossAmount is number && tradeData.grossAmount >= 1 &&
+        closeEnough(tradeData.grossAmount, tradeData.quantity * tradeData.executionPrice) &&
+        tradeData.fee is number && tradeData.fee >= 0 &&
+        closeEnough(tradeData.fee, tradeData.grossAmount * 0.001) &&
+        tradeData.netAmount is number && tradeData.netAmount > 0 &&
+        closeEnough(
+          tradeData.netAmount,
+          tradeData.side == 'BUY'
+            ? tradeData.grossAmount + tradeData.fee
+            : tradeData.grossAmount - tradeData.fee
+        ) &&
+        tradeData.realizedPnl is number &&
+        (
+          (tradeData.side == 'BUY' && tradeData.realizedPnl == 0) ||
+          (tradeData.side == 'SELL' &&
+            positionBefore.userId == tradeData.userId &&
+            positionBefore.symbol == tradeData.symbol &&
+            positionBefore.marketType == tradeData.marketType &&
+            positionBefore.status == 'open' &&
+            tradeData.quantity <= positionBefore.quantity &&
+            closeEnough(
+              tradeData.realizedPnl,
+              (tradeData.executionPrice - positionBefore.averageEntryPrice) *
+                tradeData.quantity - tradeData.fee
+            ))
+        ) &&
+        tradeData.status == 'filled' &&
+        tradeData.createdAt == request.time &&
+        getAfter(/databases/$(database)/documents/wallets/$(tradeData.userId)).data.lastTradeId == tradeId &&
+        getAfter(/databases/$(database)/documents/positions/$(positionId)).data.lastTradeId == tradeId;
+    }
+
+    function validWalletTradeUpdate(userId) {
+      let tradeId = request.resource.data.lastTradeId;
+      let tradePath = /databases/$(database)/documents/trades/$(tradeId);
+      let tradeAfter = getAfter(tradePath).data;
+      return !exists(tradePath) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'availableBalance', 'updatedAt', 'lastTradeId'
+        ]) &&
+        request.resource.data.availableBalance is number &&
+        request.resource.data.availableBalance >= 0 &&
+        request.resource.data.updatedAt == request.time &&
+        tradeAfter.userId == userId &&
+        tradeAfter.status == 'filled' &&
+        (
+          (tradeAfter.side == 'BUY' &&
+            closeEnough(request.resource.data.availableBalance, resource.data.availableBalance - tradeAfter.netAmount)) ||
+          (tradeAfter.side == 'SELL' &&
+            closeEnough(request.resource.data.availableBalance, resource.data.availableBalance + tradeAfter.netAmount))
+        );
+    }
+
+    function validPositionCreate(positionId) {
+      let tradeId = request.resource.data.lastTradeId;
+      let tradePath = /databases/$(database)/documents/trades/$(tradeId);
+      let tradeAfter = getAfter(tradePath).data;
+      return !exists(tradePath) &&
+        hasExactFields([
+          'userId', 'symbol', 'marketType', 'quantity', 'averageEntryPrice',
+          'investedAmount', 'realizedPnl', 'status', 'createdAt',
+          'updatedAt', 'lastTradeId'
+        ]) &&
+        positionId == request.auth.uid + '_' + request.resource.data.symbol &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.marketType in ['crypto', 'forex'] &&
+        request.resource.data.quantity > 0 &&
+        request.resource.data.realizedPnl == 0 &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        tradeAfter.side == 'BUY' &&
+        tradeAfter.userId == request.resource.data.userId &&
+        tradeAfter.symbol == request.resource.data.symbol &&
+        tradeAfter.marketType == request.resource.data.marketType &&
+        closeEnough(request.resource.data.quantity, tradeAfter.quantity) &&
+        closeEnough(request.resource.data.averageEntryPrice, tradeAfter.executionPrice) &&
+        closeEnough(request.resource.data.investedAmount, tradeAfter.grossAmount);
+    }
+
+    function validPositionUpdate() {
+      let tradeId = request.resource.data.lastTradeId;
+      let tradePath = /databases/$(database)/documents/trades/$(tradeId);
+      let tradeAfter = getAfter(tradePath).data;
+      return !exists(tradePath) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'quantity', 'averageEntryPrice', 'investedAmount', 'realizedPnl',
+          'status', 'updatedAt', 'lastTradeId'
+        ]) &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.quantity >= 0 &&
+        request.resource.data.investedAmount >= 0 &&
+        tradeAfter.userId == resource.data.userId &&
+        tradeAfter.symbol == resource.data.symbol &&
+        tradeAfter.marketType == resource.data.marketType &&
+        (
+          (tradeAfter.side == 'BUY' &&
+            request.resource.data.status == 'open' &&
+            closeEnough(request.resource.data.quantity, resource.data.quantity + tradeAfter.quantity) &&
+            closeEnough(request.resource.data.investedAmount, resource.data.investedAmount + tradeAfter.grossAmount) &&
+            closeEnough(
+              request.resource.data.averageEntryPrice,
+              ((resource.data.quantity * resource.data.averageEntryPrice) +
+                (tradeAfter.quantity * tradeAfter.executionPrice)) /
+                (resource.data.quantity + tradeAfter.quantity)
+            ) &&
+            request.resource.data.realizedPnl == resource.data.realizedPnl) ||
+          (tradeAfter.side == 'SELL' &&
+            resource.data.status == 'open' &&
+            tradeAfter.quantity <= resource.data.quantity &&
+            closeEnough(request.resource.data.quantity, resource.data.quantity - tradeAfter.quantity) &&
+            closeEnough(request.resource.data.realizedPnl, resource.data.realizedPnl + tradeAfter.realizedPnl) &&
+            closeEnough(request.resource.data.investedAmount, request.resource.data.averageEntryPrice * request.resource.data.quantity) &&
+            (
+              (request.resource.data.quantity == 0 && request.resource.data.status == 'closed' && request.resource.data.averageEntryPrice == 0) ||
+              (request.resource.data.quantity > 0 && request.resource.data.status == 'open' && request.resource.data.averageEntryPrice == resource.data.averageEntryPrice)
+            ))
+        );
+    }
+
     match /users/{userId} {
       allow read: if ownsDocument(userId) || isAdmin();
 
@@ -288,11 +433,20 @@ service cloud.firestore {
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
 
-      allow update: if isAdmin() && validWalletApprovalUpdate(userId);
+      allow update: if (isAdmin() && validWalletApprovalUpdate(userId)) ||
+        (ownsDocument(userId) && validWalletTradeUpdate(userId));
     }
 
     match /positions/{positionId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if signedIn() && validPositionCreate(positionId);
+      allow update: if signedIn() && resource.data.userId == request.auth.uid && validPositionUpdate();
+    }
+
+    match /trades/{tradeId} {
+      allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if signedIn() &&
+        validTradeShape(tradeId, request.resource.data);
     }
 
     match /transactions/{transactionId} {

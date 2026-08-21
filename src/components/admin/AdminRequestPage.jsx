@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, RefreshCw, Search, X } from 'lucide-react'
+import { Check, RefreshCw, X } from 'lucide-react'
 import Badge from '../common/Badge.jsx'
 import Button from '../common/Button.jsx'
 import Card from '../common/Card.jsx'
@@ -7,6 +7,7 @@ import Input from '../common/Input.jsx'
 import Modal from '../common/Modal.jsx'
 import PageHeader from '../common/PageHeader.jsx'
 import Select from '../common/Select.jsx'
+import SearchInput from '../common/SearchInput.jsx'
 import { AdminEmpty, AdminError, AdminLoading } from './AdminState.jsx'
 import { getFirestoreErrorMessage } from '../../utils/firestoreErrors.js'
 import { formatCurrency } from '../../utils/formatCurrency.js'
@@ -68,10 +69,7 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
       <AdminError message={error} />
       <Card padding="none">
         <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-[1fr_180px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <input aria-label={`Search ${plural.toLowerCase()}`} className="h-10 w-full rounded-lg border border-border bg-elevated pl-9 pr-3 text-sm outline-none focus:border-accent" onChange={(event) => setSearch(event.target.value)} placeholder="Search method, reference or destination" value={search} />
-          </div>
+          <SearchInput aria-label={`Search ${plural.toLowerCase()}`} onChange={(event) => setSearch(event.target.value)} placeholder="Search method, reference or destination" value={search} />
           <Select aria-label="Filter status" onChange={(event) => setStatus(event.target.value)} value={status}>
             <option value="all">All statuses</option><option value="pending">Pending</option>
             <option value="approved">Approved</option><option value="rejected">Rejected</option>

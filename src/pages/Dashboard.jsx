@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownLeft,
-  ArrowDownToLine,
+  BriefcaseBusiness,
   ArrowUpRight,
   CircleDollarSign,
-  LockKeyhole,
   Plus,
   WalletCards,
 } from 'lucide-react'
@@ -16,8 +15,10 @@ import PageHeader from '../components/common/PageHeader.jsx'
 import MarketCard from '../components/trading/MarketCard.jsx'
 import useAuth from '../hooks/useAuth.js'
 import useWallet from '../hooks/useWallet.js'
-import { getTicker, marketDataSource } from '../services/marketService.js'
+import { getTicker, subscribeToTicker } from '../services/marketService.js'
+import { subscribeToPositions } from '../services/positionService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
+import { calculatePositionPnl } from '../utils/pnl.js'
 
 const activities = [
   { label: 'BTC position adjusted', time: '12 minutes ago', value: '+$184.20', positive: true },
@@ -37,17 +38,25 @@ const overviewSymbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD']
 function Dashboard() {
   const { currentUser, userProfile } = useAuth()
   const { wallet, loading: walletLoading, error: walletError } = useWallet()
-  const [marketTickers, setMarketTickers] = useState([])
+  const [marketTickers, setMarketTickers] = useState(new Map())
+  const [positions, setPositions] = useState([])
+  const [positionTickers, setPositionTickers] = useState(new Map())
+  const [positionsLoading, setPositionsLoading] = useState(true)
   const navigate = useNavigate()
   const firstName = (userProfile?.fullName || currentUser?.displayName || '').trim().split(/\s+/)[0]
   const currency = wallet?.currency || 'USD'
+  const openPositions = useMemo(() => positions.filter((position) => position.status === 'open' && position.quantity > 0), [positions])
+  const positionSymbols = useMemo(() => openPositions.map((position) => position.symbol), [openPositions])
+  const positionValues = openPositions.map((position) => calculatePositionPnl(position, positionTickers.get(position.symbol)?.price))
+  const openPositionsValue = positionValues.reduce((total, value) => total + (value.marketValue || 0), 0)
+  const unrealizedPnl = positionValues.reduce((total, value) => total + (value.unrealizedPnl || 0), 0)
+  const accountEquity = (wallet?.availableBalance || 0) + openPositionsValue
+  const accountLoading = walletLoading || positionsLoading
   const metrics = [
     {
-      label: 'Total balance',
-      value: wallet
-        ? formatCurrency(wallet.availableBalance + wallet.lockedBalance, currency)
-        : 'Unavailable',
-      detail: 'Available plus locked funds',
+      label: 'Total account equity',
+      value: wallet ? formatCurrency(accountEquity, currency) : 'Unavailable',
+      detail: 'Available cash plus positions',
       icon: WalletCards,
     },
     {
@@ -57,23 +66,48 @@ function Dashboard() {
       icon: CircleDollarSign,
     },
     {
-      label: 'Locked balance',
-      value: wallet ? formatCurrency(wallet.lockedBalance, currency) : 'Unavailable',
-      detail: 'Funds currently reserved',
-      icon: LockKeyhole,
+      label: 'Open positions value',
+      value: formatCurrency(openPositionsValue, currency),
+      detail: `${openPositions.length} open position${openPositions.length === 1 ? '' : 's'}`,
+      icon: BriefcaseBusiness,
     },
     {
-      label: 'Total deposited',
-      value: wallet ? formatCurrency(wallet.totalDeposited, currency) : 'Unavailable',
-      detail: 'Approved deposits only',
-      icon: ArrowDownToLine,
+      label: 'Unrealized P/L',
+      value: formatCurrency(unrealizedPnl, currency),
+      detail: 'Live frontend valuation',
+      icon: ArrowUpRight,
     },
   ]
 
   useEffect(() => {
     let active = true
-    Promise.all(overviewSymbols.map(getTicker)).then((values) => active && setMarketTickers(values))
+    Promise.allSettled(overviewSymbols.map(getTicker)).then((results) => {
+      if (!active) return
+      const values = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
+      setMarketTickers(new Map(values.map((ticker) => [ticker.symbol, ticker])))
+    })
     return () => { active = false }
+  }, [])
+
+  useEffect(() => subscribeToPositions(currentUser.uid, (items) => { setPositions(items); setPositionsLoading(false) }, () => setPositionsLoading(false)), [currentUser.uid])
+
+  useEffect(() => {
+    const unsubscribe = positionSymbols.map((symbol) => subscribeToTicker(symbol, (ticker) => setPositionTickers((current) => new Map(current).set(symbol, ticker))))
+    return () => unsubscribe.forEach((stop) => stop())
+  }, [positionSymbols])
+
+  useEffect(() => {
+    const unsubscribe = overviewSymbols.map((symbol) => subscribeToTicker(
+      symbol,
+      (ticker) => setMarketTickers((current) => new Map(current).set(ticker.symbol, ticker)),
+      undefined,
+      (status) => setMarketTickers((current) => {
+        const ticker = current.get(symbol)
+        if (!ticker) return current
+        return new Map(current).set(symbol, { ...ticker, connectionStatus: status })
+      }),
+    ))
+    return () => unsubscribe.forEach((stop) => stop())
   }, [])
 
   return (
@@ -89,7 +123,7 @@ function Dashboard() {
               <ArrowDownLeft aria-hidden="true" className="size-4" />
               Deposit
             </Button>
-            <Button>
+            <Button onClick={() => navigate('/markets')}>
               <Plus aria-hidden="true" className="size-4" />
               New order
             </Button>
@@ -112,7 +146,7 @@ function Dashboard() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted">{label}</p>
-                {walletLoading ? (
+                {accountLoading ? (
                   <span className="mt-3 block h-7 w-32 animate-pulse rounded bg-elevated" />
                 ) : (
                   <p className="financial-value mt-3 truncate text-xl font-semibold text-foreground">
@@ -131,11 +165,11 @@ function Dashboard() {
 
       <section aria-labelledby="market-overview-title">
         <div className="mb-3 flex items-end justify-between gap-3">
-          <div><h2 className="text-sm font-semibold" id="market-overview-title">Market overview</h2><p className="mt-1 text-xs text-muted">Crypto and forex · {marketDataSource}</p></div>
+          <div><h2 className="text-sm font-semibold" id="market-overview-title">Market overview</h2><p className="mt-1 text-xs text-muted">Live Binance crypto · Demo forex</p></div>
           <Button onClick={() => navigate('/markets')} size="sm" variant="ghost">All markets</Button>
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
-          {['crypto', 'forex'].map((type) => <div key={type}><h3 className="mb-2 text-xs font-semibold capitalize text-muted">{type} market overview</h3><div className="grid gap-3 sm:grid-cols-2">{marketTickers.length ? marketTickers.filter((ticker) => ticker.type === type).map((ticker) => <MarketCard key={ticker.symbol} onClick={() => navigate(`/trade?symbol=${ticker.symbol}`)} ticker={ticker} />) : overviewSymbols.slice(type === 'crypto' ? 0 : 2, type === 'crypto' ? 2 : 4).map((symbol) => <span className="h-36 animate-pulse rounded-xl border border-border bg-surface" key={symbol} />)}</div></div>)}
+          {['crypto', 'forex'].map((type) => <div key={type}><h3 className="mb-2 text-xs font-semibold capitalize text-muted">{type} market overview</h3><div className="grid gap-3 sm:grid-cols-2">{overviewSymbols.filter((symbol) => (type === 'crypto' ? symbol.endsWith('USDT') : !symbol.endsWith('USDT'))).map((symbol) => { const ticker = marketTickers.get(symbol); return ticker ? <MarketCard key={symbol} onClick={() => navigate(`/trade?symbol=${symbol}`)} ticker={ticker} /> : <span className="h-36 rounded-xl border border-border bg-surface p-4 text-xs text-muted" key={symbol}>Market data unavailable</span> })}</div></div>)}
         </div>
       </section>
 
@@ -143,36 +177,26 @@ function Dashboard() {
         <Card className="min-w-0" padding="none">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-4">
             <div>
-              <h2 className="text-sm font-semibold">Portfolio performance</h2>
-              <p className="mt-1 text-xs text-muted">Static 30-day preview</p>
+              <h2 className="text-sm font-semibold">Account equity</h2>
+              <p className="mt-1 text-xs text-muted">Cash plus live open-position value</p>
             </div>
-            <div className="flex rounded-lg border border-border bg-elevated p-1 text-xs text-muted">
-              {['1D', '1W', '1M', '1Y'].map((period) => (
-                <button
-                  className={`cursor-pointer rounded px-2.5 py-1 transition ${period === '1M' ? 'bg-border text-foreground' : 'hover:text-foreground'}`}
-                  key={period}
-                  type="button"
-                >
-                  {period}
-                </button>
-              ))}
-            </div>
+            <Badge variant="neutral">Live valuation</Badge>
           </div>
           <div className="px-5 pb-5 pt-6">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="financial-value text-2xl font-semibold">$18,420.65</p>
-                <p className="financial-value mt-1 text-xs text-positive">+$1,284.22 · 7.49%</p>
+                {accountLoading ? <span className="block h-8 w-40 animate-pulse rounded bg-elevated" /> : <p className="financial-value text-2xl font-semibold">{formatCurrency(accountEquity, currency)}</p>}
+                {!accountLoading && <p className={`financial-value mt-1 text-xs ${unrealizedPnl >= 0 ? 'text-positive' : 'text-negative'}`}>{formatCurrency(unrealizedPnl, currency)} unrealized P/L</p>}
               </div>
-              <Badge variant="positive">
+              <Badge variant={unrealizedPnl >= 0 ? 'positive' : 'negative'}>
                 <ArrowUpRight aria-hidden="true" className="mr-1 size-3" />
-                Trending up
+                {openPositions.length} open
               </Badge>
             </div>
             <div className="relative mt-7 h-64 overflow-hidden rounded-lg border border-border/70 bg-elevated/50">
               <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:64px_48px] opacity-35" />
               <svg
-                aria-label="Portfolio performance chart placeholder"
+                aria-label="Decorative account-equity visual"
                 className="absolute inset-0 h-full w-full text-accent"
                 preserveAspectRatio="none"
                 role="img"

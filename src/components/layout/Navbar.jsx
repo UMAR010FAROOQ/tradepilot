@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Bell, ChevronDown, LogOut, Menu, Search, UserRound } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import Button from '../common/Button.jsx'
+import SearchInput from '../common/SearchInput.jsx'
 
 const pageTitles = {
   '/dashboard': 'Dashboard',
@@ -40,6 +41,7 @@ function getInitials(name, email) {
 function Navbar({ onMenuClick }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [logoutError, setLogoutError] = useState('')
+  const [globalSearch, setGlobalSearch] = useState('')
   const { currentUser, userProfile, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -79,24 +81,7 @@ function Navbar({ onMenuClick }) {
       </div>
 
       <div className="mx-5 hidden w-full max-w-md lg:block" role="search">
-        <label className="sr-only" htmlFor="global-market-search">
-          Search markets
-        </label>
-        <div className="relative">
-          <Search
-            aria-hidden="true"
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
-          />
-          <input
-            className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-14 text-sm text-foreground placeholder:text-muted/70 focus:border-accent focus:outline-none"
-            id="global-market-search"
-            placeholder="Search markets"
-            type="search"
-          />
-          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border bg-elevated px-1.5 py-0.5 font-sans text-[10px] text-muted">
-            ⌘ K
-          </kbd>
-        </div>
+        <SearchInput aria-label="Search markets" id="global-market-search" inputClassName="h-9 bg-surface" onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search markets" value={globalSearch} />
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">

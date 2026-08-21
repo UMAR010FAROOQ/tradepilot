@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
-import Button from './Button.jsx'
+import IconButton from './IconButton.jsx'
 
 function Modal({ isOpen, onClose, title, description, children, footer }) {
   useEffect(() => {
@@ -42,14 +42,13 @@ function Modal({ isOpen, onClose, title, description, children, footer }) {
               </p>
             )}
           </div>
-          <Button
+          <IconButton
             aria-label="Close dialog"
-            className="-mr-2 -mt-1 size-9 px-0"
+            className="-mr-2 -mt-1"
+            icon={X}
             onClick={onClose}
-            variant="ghost"
-          >
-            <X className="size-4" />
-          </Button>
+            title="Close dialog"
+          />
         </header>
         <div className="p-5">{children}</div>
         {footer && (

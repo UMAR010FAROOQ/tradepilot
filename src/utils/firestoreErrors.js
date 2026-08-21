@@ -15,6 +15,13 @@ const firestoreErrorMessages = {
   'admin/request-processed': 'This request has already been processed.',
   'admin/wallet-missing': 'The user wallet could not be found.',
   'admin/insufficient-balance': 'The wallet no longer has enough available balance.',
+  'trading/insufficient-balance': 'Insufficient balance.',
+  'trading/position-missing': 'No open position is available to sell.',
+  'trading/quantity-exceeded': 'Sell quantity exceeds your position.',
+  'trading/minimum': 'Trade amount must be at least $1.',
+  'trading/invalid-quantity': 'Enter a valid quantity greater than zero.',
+  'trading/market-unavailable': 'Market price is currently unavailable.',
+  aborted: 'Your account data changed. Please try again.',
 }
 
 export function getFirestoreErrorMessage(error) {

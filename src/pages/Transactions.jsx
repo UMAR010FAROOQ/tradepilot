@@ -6,6 +6,7 @@ import PageHeader from '../components/common/PageHeader.jsx'
 import useAuth from '../hooks/useAuth.js'
 import { subscribeToDepositRequests } from '../services/depositService.js'
 import { subscribeToWithdrawalRequests } from '../services/withdrawalService.js'
+import { subscribeToTrades } from '../services/tradeService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 
@@ -25,14 +26,15 @@ function Transactions() {
   const [activeTab, setActiveTab] = useState('All')
   const [deposits, setDeposits] = useState([])
   const [withdrawals, setWithdrawals] = useState([])
-  const [loading, setLoading] = useState({ deposits: true, withdrawals: true })
+  const [trades, setTrades] = useState([])
+  const [loading, setLoading] = useState({ deposits: true, withdrawals: true, trades: true })
   const [error, setError] = useState('')
   const { currentUser } = useAuth()
 
   useEffect(() => {
     const handleError = (requestError) => {
       setError(getFirestoreErrorMessage(requestError))
-      setLoading({ deposits: false, withdrawals: false })
+      setLoading({ deposits: false, withdrawals: false, trades: false })
     }
 
     const unsubscribeDeposits = subscribeToDepositRequests(
@@ -53,9 +55,19 @@ function Transactions() {
       handleError,
     )
 
+    const unsubscribeTrades = subscribeToTrades(
+      currentUser.uid,
+      (items) => {
+        setTrades(items)
+        setLoading((current) => ({ ...current, trades: false }))
+      },
+      handleError,
+    )
+
     return () => {
       unsubscribeDeposits()
       unsubscribeWithdrawals()
+      unsubscribeTrades()
     }
   }, [currentUser.uid])
 
@@ -68,16 +80,18 @@ function Transactions() {
 
     if (activeTab === 'Deposits') return deposits
     if (activeTab === 'Withdrawals') return withdrawals
-    if (activeTab === 'Trades') return []
+    if (activeTab === 'Trades') return trades
     return combined
-  }, [activeTab, deposits, withdrawals])
+  }, [activeTab, deposits, trades, withdrawals])
 
-  const isLoading = loading.deposits || loading.withdrawals
+  const isLoading = activeTab === 'Trades'
+    ? loading.trades
+    : loading.deposits || loading.withdrawals
 
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Your deposit and withdrawal requests from Firestore."
+        description="Your funding activity and simulated market orders."
         eyebrow="Activity"
         title="Transactions"
       />
@@ -118,6 +132,39 @@ function Transactions() {
               <h2 className="mt-4 text-sm font-semibold">No {activeTab.toLowerCase()} yet</h2>
               <p className="mt-1 text-xs text-muted">New request records will appear here.</p>
             </div>
+          </div>
+        ) : activeTab === 'Trades' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px] text-left">
+              <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Side</th>
+                  <th className="px-5 py-3 font-semibold">Symbol</th>
+                  <th className="px-5 py-3 font-semibold">Quantity</th>
+                  <th className="px-5 py-3 font-semibold">Execution price</th>
+                  <th className="px-5 py-3 font-semibold">Fee</th>
+                  <th className="px-5 py-3 font-semibold">Amount</th>
+                  <th className="px-5 py-3 font-semibold">Realized P/L</th>
+                  <th className="px-5 py-3 font-semibold">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visibleItems.map((trade) => (
+                  <tr key={trade.id}>
+                    <td className="px-5 py-4"><Badge variant={trade.side === 'BUY' ? 'positive' : 'negative'}>{trade.side}</Badge></td>
+                    <td className="px-5 py-4 text-sm font-semibold">{trade.symbol}</td>
+                    <td className="financial-value px-5 py-4 text-sm">{trade.quantity}</td>
+                    <td className="financial-value px-5 py-4 text-sm">{formatCurrency(trade.executionPrice)}</td>
+                    <td className="financial-value px-5 py-4 text-sm text-muted">{formatCurrency(trade.fee)}</td>
+                    <td className="financial-value px-5 py-4 text-sm">{formatCurrency(trade.grossAmount)}</td>
+                    <td className={`financial-value px-5 py-4 text-sm ${trade.realizedPnl > 0 ? 'text-positive' : trade.realizedPnl < 0 ? 'text-negative' : 'text-muted'}`}>
+                      {trade.side === 'SELL' ? formatCurrency(trade.realizedPnl) : '—'}
+                    </td>
+                    <td className="px-5 py-4 text-xs text-muted">{formatDate(trade.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="overflow-x-auto">
