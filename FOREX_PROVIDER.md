@@ -7,7 +7,7 @@ public base URL.
 Set this browser-safe value in `.env.local`:
 
 ```env
-VITE_FOREX_API_BASE_URL=https://your-trusted-proxy.example.com
+VITE_FOREX_API_BASE_URL=https://tradepilot-forex-proxy.umarffcallback02.workers.dev
 ```
 
 The proxy must forward these read-only endpoints to Twelve Data and attach the
@@ -22,4 +22,6 @@ those values in browser assets.
 Without the proxy URL, TradePilot intentionally uses the existing Forex demo
 feed for display and labels it `Forex Demo`. Simulated Forex orders remain
 disabled unless a fresh live quote is available and the New York Forex session
-is open.
+is open. The shared poller rotates two subscribed symbols every 20 seconds to
+stay within the current provider plan's eight-credit-per-minute allowance;
+quotes are considered stale after 120 seconds.

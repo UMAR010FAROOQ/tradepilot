@@ -7,8 +7,9 @@ import {
   MOCK_MARKET_SOURCE,
 } from './mockMarketService.js'
 
-const POLL_INTERVAL_MS = 15000
-export const FOREX_FRESHNESS_THRESHOLD_MS = 90000
+const POLL_INTERVAL_MS = 20000
+const POLL_BATCH_SIZE = 2
+export const FOREX_FRESHNESS_THRESHOLD_MS = 120000
 export const FOREX_MARKET_SOURCE = 'Twelve Data'
 
 const configuredBaseUrl = (import.meta.env.VITE_FOREX_API_BASE_URL || '').trim().replace(/\/$/, '')
@@ -17,7 +18,9 @@ const intervalMap = { '1m': '1min', '5m': '5min', '15m': '15min', '1h': '1h', '4
 const subscribers = new Map()
 const tickerCache = new Map()
 let pollTimer = null
+let initialPollTimer = null
 let pollPromise = null
+let pollCursor = 0
 
 export const isForexLiveConfigured = Boolean(configuredBaseUrl)
 
@@ -50,7 +53,10 @@ function numberOrNull(value) {
 }
 
 function timestampFrom(payload) {
-  const timestamp = Number(payload.timestamp)
+  const lastQuoteAt = Number(payload.last_quote_at)
+  const timestamp = Number.isFinite(lastQuoteAt) && lastQuoteAt > 0
+    ? lastQuoteAt
+    : Number(payload.timestamp)
   if (Number.isFinite(timestamp) && timestamp > 0) return timestamp * 1000
   if (!payload.datetime) return null
   const normalized = payload.datetime.includes('T') ? payload.datetime : payload.datetime.replace(' ', 'T')
@@ -82,6 +88,7 @@ function normalizeTicker(payload, symbol) {
     marketStatus: session.displayStatus,
     lastUpdated,
     isStale,
+    providerMarketOpen: typeof payload.is_market_open === 'boolean' ? payload.is_market_open : null,
     connectionStatus: isStale ? 'stale' : 'live',
   }
 }
@@ -116,16 +123,29 @@ function notifyStatus(status) {
   subscribers.forEach((entries) => entries.forEach((entry) => entry.onStatus?.(status)))
 }
 
+function aggregateStatus() {
+  if (!isForexLiveConfigured) return 'demo'
+  const tickers = [...subscribers.keys()].map((symbol) => tickerCache.get(symbol))
+  if (tickers.some((ticker) => !ticker)) return 'connecting'
+  if (tickers.some((ticker) => ticker.connectionStatus === 'demo')) return 'demo'
+  if (tickers.some((ticker) => ticker.isStale)) return 'stale'
+  return 'live'
+}
+
 async function pollSubscribers() {
   if (pollPromise || subscribers.size === 0) return pollPromise
-  const symbols = [...subscribers.keys()]
+  const subscribedSymbols = [...subscribers.keys()]
+  const symbols = subscribedSymbols.length <= POLL_BATCH_SIZE
+    ? subscribedSymbols
+    : Array.from({ length: POLL_BATCH_SIZE }, (_, index) => subscribedSymbols[(pollCursor + index) % subscribedSymbols.length])
+  pollCursor = (pollCursor + symbols.length) % subscribedSymbols.length
   pollPromise = (isForexLiveConfigured ? fetchTickers(symbols) : Promise.all(symbols.map(demoTicker)))
     .then((tickers) => {
       tickers.forEach((ticker) => {
         tickerCache.set(ticker.symbol, ticker)
         subscribers.get(ticker.symbol)?.forEach((entry) => entry.callback(ticker))
       })
-      notifyStatus(isForexLiveConfigured ? (tickers.some((ticker) => ticker.isStale) ? 'stale' : 'live') : 'demo')
+      notifyStatus(aggregateStatus())
     })
     .catch(async (error) => {
       notifyStatus('unavailable')
@@ -136,7 +156,7 @@ async function pollSubscribers() {
           tickerCache.set(ticker.symbol, ticker)
           subscribers.get(ticker.symbol)?.forEach((entry) => entry.callback(ticker))
         })
-        notifyStatus('demo')
+        notifyStatus(aggregateStatus())
       }
     })
     .finally(() => { pollPromise = null })
@@ -145,7 +165,10 @@ async function pollSubscribers() {
 
 function ensurePolling() {
   if (pollTimer || subscribers.size === 0) return
-  pollSubscribers()
+  initialPollTimer = window.setTimeout(() => {
+    initialPollTimer = null
+    pollSubscribers()
+  }, 0)
   pollTimer = window.setInterval(pollSubscribers, POLL_INTERVAL_MS)
 }
 
@@ -174,14 +197,16 @@ export async function getForexHistoricalCandles(symbol, interval = '1h') {
   if (!providerInterval) throw createServiceError('forex/unsupported-interval', 'This Forex chart interval is not supported.')
   const payload = await request('/time_series', { symbol: providerSymbol(symbol), interval: providerInterval, outputsize: '500', order: 'ASC', timezone: 'UTC' })
   if (!Array.isArray(payload?.values)) throw createServiceError('forex/provider-unavailable', 'Forex chart data is unavailable.')
-  return payload.values.map((item) => ({
+  const candles = payload.values.map((item) => ({
     time: Math.floor(timestampFrom(item) / 1000),
     open: Number(item.open),
     high: Number(item.high),
     low: Number(item.low),
     close: Number(item.close),
     volume: numberOrNull(item.volume),
-  })).filter((item) => Number.isFinite(item.time) && Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close)).sort((first, second) => first.time - second.time)
+  })).filter((item) => Number.isFinite(item.time) && Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close))
+  return [...new Map(candles.map((candle) => [candle.time, candle])).values()]
+    .sort((first, second) => first.time - second.time)
 }
 
 export function subscribeToForexTicker(symbol, callback, onError, onStatus) {
@@ -200,7 +225,10 @@ export function subscribeToForexTicker(symbol, callback, onError, onStatus) {
     if (entries?.size === 0) subscribers.delete(symbol)
     if (subscribers.size === 0) {
       window.clearInterval(pollTimer)
+      window.clearTimeout(initialPollTimer)
       pollTimer = null
+      initialPollTimer = null
+      pollCursor = 0
     }
   }
 }
