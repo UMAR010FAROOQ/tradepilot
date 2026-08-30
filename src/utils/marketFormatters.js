@@ -15,6 +15,11 @@ export function formatPercent(value) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
 }
 
+export function formatQuantity(value) {
+  if (!Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 8 }).format(value)
+}
+
 export function formatVolume(value) {
   if (!Number.isFinite(value)) return 'N/A'
   const units = [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']]

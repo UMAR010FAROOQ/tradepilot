@@ -30,6 +30,8 @@ export async function getUsers() {
 export const getDeposits = () => orderedCollection('deposits')
 export const getWithdrawals = () => orderedCollection('withdrawals')
 export const getTransactions = () => orderedCollection('transactions')
+export const getTrades = () => orderedCollection('trades')
+export async function getPositions() { return records(await getDocs(collection(db, 'positions'))) }
 
 export async function getPendingDeposits() {
   return (await getDeposits()).filter((item) => item.status === 'pending')
@@ -79,6 +81,7 @@ async function approveRequest(collectionName, requestId, type) {
     }
 
     const auditRef = doc(collection(db, 'transactions'))
+    const notificationRef = doc(collection(db, 'notifications'))
     const walletUpdate = {
       availableBalance:
         type === 'deposit'
@@ -108,6 +111,16 @@ async function approveRequest(collectionName, requestId, type) {
       referenceId: requestId,
       createdAt: serverTimestamp(),
     })
+    transaction.set(notificationRef, {
+      userId: requestData.userId,
+      type: `${type}_approved`,
+      title: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} approved`,
+      message: `Your ${type} request for ${requestData.amount} ${requestData.currency} was approved.`,
+      read: false,
+      createdAt: serverTimestamp(),
+      referenceType: type,
+      referenceId: requestId,
+    })
   })
 }
 
@@ -123,6 +136,9 @@ async function rejectRequest(collectionName, requestId, reason) {
     const requestSnapshot = await transaction.get(requestRef)
     requireAdmin(adminSnapshot)
     requirePending(requestSnapshot)
+    const requestData = requestSnapshot.data()
+    const type = collectionName === 'deposits' ? 'deposit' : 'withdrawal'
+    const notificationRef = doc(collection(db, 'notifications'))
 
     transaction.update(requestRef, {
       status: 'rejected',
@@ -130,6 +146,16 @@ async function rejectRequest(collectionName, requestId, reason) {
       rejectedBy: admin.uid,
       rejectedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+    })
+    transaction.set(notificationRef, {
+      userId: requestData.userId,
+      type: `${type}_rejected`,
+      title: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} rejected`,
+      message: `Your ${type} request for ${requestData.amount} ${requestData.currency} was rejected.`,
+      read: false,
+      createdAt: serverTimestamp(),
+      referenceType: type,
+      referenceId: requestId,
     })
   })
 }

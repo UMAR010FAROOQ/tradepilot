@@ -15,6 +15,7 @@ import Markets from './pages/Markets.jsx'
 import Trade from './pages/Trade.jsx'
 import Portfolio from './pages/Portfolio.jsx'
 import ActiveTrades from './pages/ActiveTrades.jsx'
+import Analytics from './pages/Analytics.jsx'
 import Wallet from './pages/Wallet.jsx'
 import Deposit from './pages/Deposit.jsx'
 import Withdraw from './pages/Withdraw.jsx'
@@ -29,6 +30,7 @@ import AdminUsers from './pages/admin/Users.jsx'
 import AdminDeposits from './pages/admin/Deposits.jsx'
 import AdminWithdrawals from './pages/admin/Withdrawals.jsx'
 import AdminTransactions from './pages/admin/Transactions.jsx'
+import AdminTrades from './pages/admin/Trades.jsx'
 
 function App() {
   return (
@@ -51,6 +53,7 @@ function App() {
               <Route path="trade" element={<Trade />} />
               <Route path="portfolio" element={<Portfolio />} />
               <Route path="active-trades" element={<ActiveTrades />} />
+              <Route path="analytics" element={<Analytics />} />
               <Route path="wallet" element={<Wallet />} />
               <Route path="deposit" element={<Deposit />} />
               <Route path="withdraw" element={<Withdraw />} />
@@ -69,6 +72,7 @@ function App() {
               <Route path="admin/deposits" element={<AdminDeposits />} />
               <Route path="admin/withdrawals" element={<AdminWithdrawals />} />
               <Route path="admin/transactions" element={<AdminTransactions />} />
+              <Route path="admin/trades" element={<AdminTrades />} />
             </Route>
           </Route>
 

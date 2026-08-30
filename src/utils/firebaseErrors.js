@@ -8,6 +8,8 @@ const firebaseErrorMessages = {
   'auth/network-request-failed': 'Unable to reach the authentication service. Check your connection.',
   'auth/user-disabled': 'This account is currently unavailable. Contact support for help.',
   'auth/operation-not-allowed': 'Email and password sign-in is not enabled yet.',
+  'auth/wrong-password': 'The current password is incorrect.',
+  'auth/requires-recent-login': 'Please sign in again before changing your password.',
 }
 
 export function getFirebaseErrorMessage(error) {

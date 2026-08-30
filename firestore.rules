@@ -29,6 +29,25 @@ service cloud.firestore {
          (data.method != 'Pakistani Bank Account' && !data.keys().hasAny(['bankName'])));
     }
 
+    function validFundingNotification() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'type', 'title', 'message', 'read', 'createdAt', 'referenceType', 'referenceId']) &&
+        data.keys().hasOnly(['userId', 'type', 'title', 'message', 'read', 'createdAt', 'referenceType', 'referenceId']) &&
+        data.type in ['deposit_approved', 'deposit_rejected', 'withdrawal_approved', 'withdrawal_rejected'] &&
+        data.referenceType in ['deposit', 'withdrawal'] &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 80 &&
+        data.message is string && data.message.size() > 0 && data.message.size() <= 240 &&
+        data.read == false && data.createdAt == request.time &&
+        ((data.referenceType == 'deposit' &&
+          getAfter(/databases/$(database)/documents/deposits/$(data.referenceId)).data.userId == data.userId &&
+          ((data.type == 'deposit_approved' && getAfter(/databases/$(database)/documents/deposits/$(data.referenceId)).data.status == 'approved') ||
+           (data.type == 'deposit_rejected' && getAfter(/databases/$(database)/documents/deposits/$(data.referenceId)).data.status == 'rejected'))) ||
+         (data.referenceType == 'withdrawal' &&
+          getAfter(/databases/$(database)/documents/withdrawals/$(data.referenceId)).data.userId == data.userId &&
+          ((data.type == 'withdrawal_approved' && getAfter(/databases/$(database)/documents/withdrawals/$(data.referenceId)).data.status == 'approved') ||
+           (data.type == 'withdrawal_rejected' && getAfter(/databases/$(database)/documents/withdrawals/$(data.referenceId)).data.status == 'rejected'))));
+    }
+
     function validCompletedTransaction(transactionId) {
       let transactionData = request.resource.data;
       let walletBefore = get(
@@ -461,6 +480,14 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isAdmin() && validCompletedTransaction(transactionId);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isAdmin() && validFundingNotification();
+      allow update: if signedIn() && resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+        resource.data.read == false && request.resource.data.read == true;
     }
 
     match /deposits/{depositId} {

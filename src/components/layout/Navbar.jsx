@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { Bell, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bell, Check, CheckCheck, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import Button from '../common/Button.jsx'
 import SearchInput from '../common/SearchInput.jsx'
+import { markAllNotificationsRead, markNotificationRead, subscribeToNotifications } from '../../services/notificationService.js'
 
 const pageTitles = {
   '/dashboard': 'Dashboard',
@@ -11,6 +12,7 @@ const pageTitles = {
   '/trade': 'Trade',
   '/portfolio': 'Portfolio',
   '/active-trades': 'Active trades',
+  '/analytics': 'Analytics',
   '/wallet': 'Wallet',
   '/deposit': 'Deposit',
   '/withdraw': 'Withdraw',
@@ -43,6 +45,9 @@ function Navbar({ onMenuClick }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [logoutError, setLogoutError] = useState('')
   const [globalSearch, setGlobalSearch] = useState('')
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [notificationError, setNotificationError] = useState('')
   const { currentUser, userProfile, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -50,6 +55,12 @@ function Navbar({ onMenuClick }) {
   const displayName = userProfile?.fullName || 'TradePilot user'
   const email = userProfile?.email || currentUser?.email || ''
   const initials = getInitials(userProfile?.fullName, email)
+  const unreadCount = notifications.filter((item) => !item.read).length
+
+  useEffect(() => {
+    if (!currentUser?.uid) return undefined
+    return subscribeToNotifications(currentUser.uid, setNotifications, () => setNotificationError('Notifications are unavailable until the latest Firestore rules and indexes are deployed.'))
+  }, [currentUser?.uid])
 
   const handleLogout = async () => {
     setLogoutError('')
@@ -81,9 +92,7 @@ function Navbar({ onMenuClick }) {
         </div>
       </div>
 
-      <div className="mx-5 hidden w-full max-w-md lg:block" role="search">
-        <SearchInput aria-label="Search markets" id="global-market-search" inputClassName="h-9 bg-surface" onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search markets" value={globalSearch} />
-      </div>
+      <form className="mx-5 hidden w-full max-w-md lg:block" onSubmit={(event) => { event.preventDefault(); const query = globalSearch.trim(); navigate(query ? `/markets?search=${encodeURIComponent(query)}` : '/markets') }} role="search"><SearchInput aria-label="Search markets" id="global-market-search" inputClassName="h-9 bg-surface" onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search markets" value={globalSearch} /></form>
 
       <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
         <div className="hidden items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 sm:flex">
@@ -93,10 +102,9 @@ function Navbar({ onMenuClick }) {
           </span>
           <span className="text-xs font-medium text-muted">Market data live</span>
         </div>
-        <Button aria-label="Notifications" className="relative size-9 px-0" variant="ghost">
-          <Bell aria-hidden="true" className="size-[18px]" />
-          <span className="absolute right-2 top-2 size-1.5 rounded-full bg-negative" />
-        </Button>
+        <div className="relative"><Button aria-expanded={notificationsOpen} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} className="relative size-9 px-0" onClick={() => setNotificationsOpen((value) => !value)} variant="ghost"><Bell aria-hidden="true" className="size-[18px]" />{unreadCount > 0 && <span className="absolute right-1.5 top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-negative px-1 text-[9px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}</Button>
+          {notificationsOpen && <section aria-label="Recent notifications" className="absolute right-0 top-12 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-elevated shadow-panel"><header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3"><div><h2 className="text-sm font-semibold">Notifications</h2><p className="mt-0.5 text-[11px] text-muted">{unreadCount} unread</p></div><Button disabled={!unreadCount} onClick={async () => { try { await markAllNotificationsRead(notifications); setNotificationError('') } catch { setNotificationError('Unable to update notifications.') } }} size="sm" variant="ghost"><CheckCheck className="size-3.5" />Mark all read</Button></header>{notificationError && <p className="border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning" role="status">{notificationError}</p>}<div className="max-h-96 overflow-y-auto">{notifications.length === 0 ? <p className="px-4 py-8 text-center text-sm text-muted">No notifications yet.</p> : notifications.slice(0, 8).map((item) => <article className={`border-b border-border px-4 py-3 last:border-0 ${item.read ? '' : 'bg-accent/5'}`} key={item.id}><div className="flex items-start gap-3"><span className={`mt-1 size-2 shrink-0 rounded-full ${item.read ? 'bg-muted/40' : 'bg-accent'}`} /><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-5 text-muted">{item.message}</p><p className="mt-2 text-[10px] text-muted">{item.createdAt?.toDate?.().toLocaleString() || 'Just now'}</p></div>{!item.read && <button aria-label={`Mark ${item.title} as read`} className="grid size-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface hover:text-foreground" onClick={async () => { try { await markNotificationRead(item.id); setNotificationError('') } catch { setNotificationError('Unable to update this notification.') } }} type="button"><Check className="size-4" /></button>}</div></article>)}</div></section>}
+        </div>
         <div className="relative">
           <button
             aria-controls="account-menu"

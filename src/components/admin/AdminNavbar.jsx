@@ -1,4 +1,4 @@
-import { Bell, Menu, ShieldCheck } from 'lucide-react'
+import { Menu, ShieldCheck } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import Button from '../common/Button.jsx'
@@ -6,6 +6,7 @@ import Button from '../common/Button.jsx'
 const titles = {
   '/admin': 'Overview', '/admin/users': 'Users', '/admin/deposits': 'Deposits',
   '/admin/withdrawals': 'Withdrawals', '/admin/transactions': 'Transactions',
+  '/admin/trades': 'Trades',
 }
 
 function AdminNavbar({ onMenuClick }) {
@@ -22,7 +23,6 @@ function AdminNavbar({ onMenuClick }) {
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         <span className="hidden items-center gap-2 rounded-full border border-positive/20 bg-positive/10 px-3 py-1.5 text-xs font-medium text-positive sm:flex"><ShieldCheck className="size-3.5" /> Admin session</span>
-        <Button aria-label="Notifications" className="size-9 px-0" variant="ghost"><Bell className="size-[18px]" /></Button>
         <span className="grid size-8 place-items-center rounded-lg bg-accent/15 text-xs font-bold text-accent">{name.slice(0, 2).toUpperCase()}</span>
         <span className="hidden max-w-44 sm:block"><span className="block truncate text-xs font-semibold">{name}</span><span className="block truncate text-[10px] text-muted">{currentUser?.email}</span></span>
       </div>

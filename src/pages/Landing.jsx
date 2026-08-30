@@ -1,16 +1,19 @@
+import { useEffect, useState } from 'react'
 import { ArrowRight, BarChart3, ShieldCheck, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Badge from '../components/common/Badge.jsx'
 import Button from '../components/common/Button.jsx'
 import Card from '../components/common/Card.jsx'
+import { getTicker } from '../services/marketService.js'
+import { marketBySymbol } from '../data/markets.js'
+import { formatPercent, formatPrice } from '../utils/marketFormatters.js'
 
-const marketPreview = [
-  { symbol: 'EUR/USD', type: 'Forex', price: '1.08642', change: '+0.24%' },
-  { symbol: 'BTC/USD', type: 'Crypto', price: '68,420.10', change: '+1.82%' },
-  { symbol: 'ETH/USD', type: 'Crypto', price: '3,582.46', change: '-0.38%' },
-]
+const previewSymbols = ['BTCUSDT', 'ETHUSDT', 'XAUUSD']
 
 function Landing() {
+  const navigate = useNavigate()
+  const [tickers, setTickers] = useState(new Map())
+  useEffect(() => { let active = true; Promise.allSettled(previewSymbols.map((symbol) => getTicker(symbol))).then((results) => { if (!active) return; const items = results.filter((result) => result.status === 'fulfilled').map((result) => result.value); setTickers(new Map(items.map((item) => [item.symbol, item]))) }); return () => { active = false } }, [])
   return (
     <div className="min-h-dvh overflow-hidden bg-canvas text-foreground">
       <header className="border-b border-border/80 bg-canvas/90 backdrop-blur-xl">
@@ -58,11 +61,11 @@ function Landing() {
                 A focused platform for tracking forex and digital assets, built around clarity, speed, and disciplined decisions.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg">
+                <Button onClick={() => navigate('/signup')} size="lg">
                   Start exploring
                   <ArrowRight aria-hidden="true" className="size-4" />
                 </Button>
-                <Button size="lg" variant="secondary">
+                <Button onClick={() => navigate('/login')} size="lg" variant="secondary">
                   View workspace
                 </Button>
               </div>
@@ -80,25 +83,23 @@ function Landing() {
                 </span>
               </div>
               <div className="divide-y divide-border">
-                {marketPreview.map((market) => (
-                  <div className="grid grid-cols-[1fr_auto] items-center gap-5 px-5 py-4" key={market.symbol}>
+                {previewSymbols.map((symbol) => { const market = marketBySymbol.get(symbol); const ticker = tickers.get(symbol); return (
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-5 px-5 py-4" key={symbol}>
                     <div>
-                      <p className="text-sm font-semibold">{market.symbol}</p>
-                      <p className="mt-0.5 text-xs text-muted">{market.type}</p>
+                      <p className="text-sm font-semibold">{market.displaySymbol}</p>
+                      <p className="mt-0.5 text-xs capitalize text-muted">{market.type}</p>
                     </div>
                     <div className="text-right">
-                      <p className="financial-value text-sm">{market.price}</p>
-                      <p
-                        className={`financial-value mt-0.5 text-xs ${market.change.startsWith('-') ? 'text-negative' : 'text-positive'}`}
-                      >
-                        {market.change}
+                      <p className="financial-value text-sm">{ticker ? formatPrice(ticker.price, market) : 'Waiting…'}</p>
+                      <p className={`financial-value mt-0.5 text-xs ${(ticker?.changePercent || 0) < 0 ? 'text-negative' : 'text-positive'}`}>
+                        {ticker ? formatPercent(ticker.changePercent) : '—'}
                       </p>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
               <div className="border-t border-border bg-elevated/60 px-5 py-4 text-center text-xs text-muted">
-                Static market preview
+                Public market data preview
               </div>
             </Card>
           </div>
@@ -109,9 +110,9 @@ function Landing() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">TradePilot</p>
               <h2 className="mt-2 text-xl font-semibold">Your market workspace is ready.</h2>
-              <p className="mt-1 text-sm text-muted">Explore the interface with static demonstration data.</p>
+              <p className="mt-1 text-sm text-muted">Explore live public markets and simulated account tools.</p>
             </div>
-            <Button className="sm:self-center">Open dashboard</Button>
+            <Button className="sm:self-center" onClick={() => navigate('/login')}>Open dashboard</Button>
           </div>
         </section>
       </main>

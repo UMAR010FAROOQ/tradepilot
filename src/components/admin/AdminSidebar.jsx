@@ -1,4 +1,4 @@
-import { BanknoteArrowDown, BanknoteArrowUp, LayoutDashboard, LogOut, ReceiptText, Users, X } from 'lucide-react'
+import { BanknoteArrowDown, BanknoteArrowUp, CandlestickChart, LayoutDashboard, LogOut, ReceiptText, Users, X } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import Button from '../common/Button.jsx'
@@ -9,6 +9,7 @@ const links = [
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/deposits', label: 'Deposits', icon: BanknoteArrowDown },
   { to: '/admin/withdrawals', label: 'Withdrawals', icon: BanknoteArrowUp },
+  { to: '/admin/trades', label: 'Trades', icon: CandlestickChart },
   { to: '/admin/transactions', label: 'Transactions', icon: ReceiptText },
 ]
 

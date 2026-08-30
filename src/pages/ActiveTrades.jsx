@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CircleAlert, XCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import Button from '../components/common/Button.jsx'
 import Card from '../components/common/Card.jsx'
 import Modal from '../components/common/Modal.jsx'
@@ -20,6 +21,7 @@ const formatDate = (timestamp) => timestamp?.toDate?.().toLocaleString() || 'Pen
 
 function ActiveTrades() {
   const { currentUser } = useAuth()
+  const navigate = useNavigate()
   const [positions, setPositions] = useState([])
   const [tickers, setTickers] = useState(new Map())
   const [loading, setLoading] = useState(true)
@@ -43,6 +45,9 @@ function ActiveTrades() {
     const ticker = tickers.get(position.symbol)
     return { ...position, ticker, ...calculatePositionPnl(position, ticker?.price) }
   }), [positions, tickers])
+  const investedValue = rows.reduce((total, position) => total + (position.investedAmount || 0), 0)
+  const currentMarketValue = rows.reduce((total, position) => total + (position.marketValue || 0), 0)
+  const totalUnrealizedPnl = rows.reduce((total, position) => total + (position.unrealizedPnl || 0), 0)
 
   const openCloseDialog = async (position) => {
     setError('')
@@ -77,12 +82,13 @@ function ActiveTrades() {
     <td className="financial-value px-5 py-4 text-sm">{formatPrice(position.ticker?.price, position)}</td>
     <td className="px-5 py-4">{position.unrealizedPnl === null ? <span className="text-xs text-muted">Waiting for quote</span> : <PriceChange amount={position.unrealizedPnl} showAmount value={position.unrealizedPnlPercent} />}</td>
     <td className="px-5 py-4 text-xs text-muted">{formatDate(position.updatedAt || position.createdAt)}</td>
-    <td className="px-5 py-4 text-right"><Button disabled={!position.ticker} onClick={() => openCloseDialog(position)} size="sm" variant="danger"><XCircle className="size-3.5" />Close</Button></td>
+    <td className="px-5 py-4"><div className="flex justify-end gap-2"><Button onClick={() => navigate(`/trade?symbol=${position.symbol}`)} size="sm" variant="secondary">Open trade</Button><Button disabled={!position.ticker} onClick={() => openCloseDialog(position)} size="sm" variant="danger"><XCircle className="size-3.5" />Close</Button></div></td>
   </>
 
   return <div className="space-y-6">
     <PageHeader description="Monitor and close your long-only simulated positions using a fresh market quote." eyebrow="Trading" title="Active trades" />
     {error && <div className="flex gap-2 rounded-lg border border-negative/25 bg-negative/10 p-3 text-sm text-negative" role="alert"><CircleAlert className="size-4 shrink-0" />{error}</div>}
+    <section aria-label="Active trade summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[['Open positions', rows.length], ['Invested value', formatCurrency(investedValue)], ['Current market value', formatCurrency(currentMarketValue)], ['Unrealized P/L', formatCurrency(totalUnrealizedPnl)]].map(([label, value]) => <Card key={label}><p className="text-xs text-muted">{label}</p><p className={`financial-value mt-3 text-xl font-semibold ${label === 'Unrealized P/L' ? totalUnrealizedPnl >= 0 ? 'text-positive' : 'text-negative' : ''}`}>{value}</p></Card>)}</section>
     <Card padding="none">
       {loading ? <div className="grid gap-3 p-5" role="status">{[1, 2, 3].map((item) => <span className="h-16 animate-pulse rounded-lg bg-elevated" key={item} />)}</div> : rows.length === 0 ? <div className="grid min-h-64 place-items-center p-8 text-center"><div><XCircle className="mx-auto size-7 text-muted" /><h2 className="mt-3 text-sm font-semibold">No active trades</h2><p className="mt-1 text-xs text-muted">Open a simulated Buy order to create a long position.</p></div></div> : <><div className="divide-y divide-border md:hidden">{rows.map((position) => <article className="space-y-4 p-5" key={position.id}><div className="flex items-start justify-between"><div><h2 className="text-sm font-semibold">{position.symbol}</h2><p className="mt-1 text-xs capitalize text-muted">{position.marketType} · Long</p></div>{position.unrealizedPnl !== null && <PriceChange value={position.unrealizedPnlPercent} />}</div><dl className="grid grid-cols-2 gap-4 text-xs"><div><dt className="text-muted">Quantity</dt><dd className="financial-value mt-1">{position.quantity}</dd></div><div><dt className="text-muted">Entry</dt><dd className="financial-value mt-1">{formatPrice(position.averageEntryPrice, position)}</dd></div><div><dt className="text-muted">Live price</dt><dd className="financial-value mt-1">{formatPrice(position.ticker?.price, position)}</dd></div><div><dt className="text-muted">Unrealized P/L</dt><dd className={`financial-value mt-1 ${(position.unrealizedPnl || 0) >= 0 ? 'text-positive' : 'text-negative'}`}>{position.unrealizedPnl === null ? 'Waiting for quote' : formatCurrency(position.unrealizedPnl)}</dd></div></dl><Button className="w-full" disabled={!position.ticker} onClick={() => openCloseDialog(position)} size="sm" variant="danger"><XCircle className="size-3.5" />Close trade</Button></article>)}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[920px] text-left"><thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">Market</th><th className="px-5 py-3">Quantity</th><th className="px-5 py-3">Entry</th><th className="px-5 py-3">Live price</th><th className="px-5 py-3">Unrealized P/L</th><th className="px-5 py-3">Updated</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-border">{rows.map((position) => <tr key={position.id}>{cells(position)}</tr>)}</tbody></table></div></>}
     </Card>

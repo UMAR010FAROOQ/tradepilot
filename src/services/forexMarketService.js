@@ -1,11 +1,6 @@
 import { marketBySymbol, markets } from '../data/markets.js'
 import { createServiceError } from '../utils/firestoreErrors.js'
 import { getForexSessionStatus } from '../utils/forexSession.js'
-import {
-  getMockHistoricalCandles,
-  getMockTicker,
-  MOCK_MARKET_SOURCE,
-} from './mockMarketService.js'
 
 const POLL_INTERVAL_MS = 20000
 const POLL_BATCH_SIZE = 2
@@ -104,31 +99,14 @@ async function fetchTickers(symbols) {
   return uniqueSymbols.map((symbol) => normalizeTicker(extractQuote(payload, symbol) || {}, symbol))
 }
 
-async function demoTicker(symbol) {
-  if (symbol === 'XAUUSD') throw createServiceError('forex/live-required', 'Live Gold data is currently unavailable.')
-  const ticker = await getMockTicker(symbol)
-  const session = getForexSessionStatus()
-  return {
-    ...ticker,
-    volume24h: null,
-    source: MOCK_MARKET_SOURCE,
-    status: session.status,
-    marketStatus: session.displayStatus,
-    lastUpdated: Date.now(),
-    isStale: false,
-    connectionStatus: 'demo',
-  }
-}
-
 function notifyStatus(status) {
   subscribers.forEach((entries) => entries.forEach((entry) => entry.onStatus?.(status)))
 }
 
 function aggregateStatus() {
-  if (!isForexLiveConfigured) return 'demo'
+  if (!isForexLiveConfigured) return 'unavailable'
   const tickers = [...subscribers.keys()].map((symbol) => tickerCache.get(symbol))
   if (tickers.some((ticker) => !ticker)) return 'connecting'
-  if (tickers.some((ticker) => ticker.connectionStatus === 'demo')) return 'demo'
   if (tickers.some((ticker) => ticker.isStale)) return 'stale'
   return 'live'
 }
@@ -140,7 +118,7 @@ async function pollSubscribers() {
     ? subscribedSymbols
     : Array.from({ length: POLL_BATCH_SIZE }, (_, index) => subscribedSymbols[(pollCursor + index) % subscribedSymbols.length])
   pollCursor = (pollCursor + symbols.length) % subscribedSymbols.length
-  pollPromise = (isForexLiveConfigured ? fetchTickers(symbols) : Promise.all(symbols.map(demoTicker)))
+  pollPromise = fetchTickers(symbols)
     .then((tickers) => {
       tickers.forEach((ticker) => {
         tickerCache.set(ticker.symbol, ticker)
@@ -151,14 +129,6 @@ async function pollSubscribers() {
     .catch(async (error) => {
       notifyStatus('unavailable')
       symbols.forEach((symbol) => subscribers.get(symbol)?.forEach((entry) => entry.onError?.(error)))
-      if (isForexLiveConfigured) {
-        const fallbackTickers = await Promise.all(symbols.filter((symbol) => symbol !== 'XAUUSD').map(demoTicker))
-        fallbackTickers.forEach((ticker) => {
-          tickerCache.set(ticker.symbol, ticker)
-          subscribers.get(ticker.symbol)?.forEach((entry) => entry.callback(ticker))
-        })
-        notifyStatus(aggregateStatus())
-      }
     })
     .finally(() => { pollPromise = null })
   return pollPromise
@@ -180,8 +150,7 @@ export function getForexMarketSymbols() {
 export async function getForexTicker(symbol, options = {}) {
   marketFor(symbol)
   if (!isForexLiveConfigured) {
-    if (options.forExecution) throw createServiceError('forex/live-required', 'Live Forex data is required to place a simulated Forex order.')
-    return demoTicker(symbol)
+    throw createServiceError('forex/live-required', 'Live Forex data is not configured.')
   }
   const session = getForexSessionStatus()
   if (options.forExecution && !session.isOpen) throw createServiceError('forex/market-closed', 'Forex market is currently closed.')
@@ -194,8 +163,7 @@ export async function getForexTicker(symbol, options = {}) {
 export async function getForexHistoricalCandles(symbol, interval = '1h') {
   marketFor(symbol)
   if (!isForexLiveConfigured) {
-    if (symbol === 'XAUUSD') throw createServiceError('forex/live-required', 'Live Gold chart data is currently unavailable.')
-    return getMockHistoricalCandles(symbol, interval)
+    throw createServiceError('forex/live-required', 'Live Forex chart data is not configured.')
   }
   const providerInterval = intervalMap[interval]
   if (!providerInterval) throw createServiceError('forex/unsupported-interval', 'This Forex chart interval is not supported.')
@@ -220,7 +188,7 @@ export function subscribeToForexTicker(symbol, callback, onError, onStatus) {
   subscribers.get(symbol).add(entry)
   const cached = tickerCache.get(symbol)
   if (cached) callback(cached)
-  onStatus?.(isForexLiveConfigured ? 'connecting' : 'demo')
+  onStatus?.(isForexLiveConfigured ? 'connecting' : 'unavailable')
   ensurePolling()
 
   return () => {

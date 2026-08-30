@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CircleAlert, Search, Star } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Card from '../components/common/Card.jsx'
 import IconButton from '../components/common/IconButton.jsx'
 import PageHeader from '../components/common/PageHeader.jsx'
@@ -20,7 +20,8 @@ function Markets() {
   const [tickers, setTickers] = useState(new Map())
   const [symbols, setSymbols] = useState([])
   const [tab, setTab] = useState('All')
-  const [search, setSearch] = useState('')
+  const [searchParams] = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('search') || '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pending, setPending] = useState('')

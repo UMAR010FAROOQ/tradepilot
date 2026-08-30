@@ -55,7 +55,7 @@ function Trade() {
     () => setStreamError('Live price updates are temporarily unavailable.'),
     (status) => {
       setConnectionStatus(status)
-      if (status === 'live' || status === 'demo' || status === 'stale') setStreamError('')
+      if (status === 'live' || status === 'stale') setStreamError('')
     },
   ), [symbol])
 

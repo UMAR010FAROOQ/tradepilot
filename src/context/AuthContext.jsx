@@ -138,6 +138,13 @@ function AuthProvider({ children }) {
         await authService.logout()
       },
       resetPassword: authService.resetPassword,
+      updateProfileName: async (fullName) => {
+        const cleanName = await authService.updateProfileName(currentUser.uid, fullName)
+        const nextProfile = { ...userProfile, fullName: cleanName }
+        profileCache.set(currentUser.uid, nextProfile)
+        setUserProfile(nextProfile)
+        return nextProfile
+      },
       initializeAccount: async (fullName) => {
         if (!currentUser) {
           const error = new Error('A signed-in user is required to initialize an account.')

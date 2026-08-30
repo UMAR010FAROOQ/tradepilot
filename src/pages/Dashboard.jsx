@@ -19,7 +19,7 @@ import { getTicker, subscribeToTicker } from '../services/marketService.js'
 import { subscribeToPositions } from '../services/positionService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 import { calculatePositionPnl } from '../utils/pnl.js'
-import { getRecentTrades } from '../services/tradeService.js'
+import { subscribeToTrades } from '../services/tradeService.js'
 import { marketBySymbol } from '../data/markets.js'
 import { formatPrice } from '../utils/marketFormatters.js'
 
@@ -85,7 +85,7 @@ function Dashboard() {
   }, [])
 
   useEffect(() => subscribeToPositions(currentUser.uid, (items) => { setPositions(items); setPositionsLoading(false) }, () => setPositionsLoading(false)), [currentUser.uid])
-  useEffect(() => { let active = true; getRecentTrades(currentUser.uid, 5).then((items) => active && setRecentTrades(items)).catch(() => {}); return () => { active = false } }, [currentUser.uid])
+  useEffect(() => subscribeToTrades(currentUser.uid, (items) => setRecentTrades(items.slice(0, 5)), () => {}), [currentUser.uid])
 
   useEffect(() => {
     const unsubscribe = positionSymbols.map((symbol) => subscribeToTicker(symbol, (ticker) => setPositionTickers((current) => new Map(current).set(symbol, ticker))))
@@ -176,7 +176,7 @@ function Dashboard() {
               <h2 className="text-sm font-semibold">Account equity</h2>
               <p className="mt-1 text-xs text-muted">Cash plus live open-position value</p>
             </div>
-            <Badge variant="neutral">Live valuation</Badge>
+            <Button onClick={() => navigate('/portfolio')} size="sm" variant="ghost">View portfolio</Button>
           </div>
           <div className="px-5 pb-5 pt-6">
             <div className="flex items-end justify-between gap-4">
@@ -189,34 +189,7 @@ function Dashboard() {
                 {openPositions.length} open
               </Badge>
             </div>
-            <div className="relative mt-7 h-64 overflow-hidden rounded-lg border border-border/70 bg-elevated/50">
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:64px_48px] opacity-35" />
-              <svg
-                aria-label="Decorative account-equity visual"
-                className="absolute inset-0 h-full w-full text-accent"
-                preserveAspectRatio="none"
-                role="img"
-                viewBox="0 0 800 260"
-              >
-                <defs>
-                  <linearGradient id="dashboard-chart-fill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.24" />
-                    <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d="M0 225 C70 208 95 218 145 190 S245 205 298 157 S388 173 448 120 S545 144 600 98 S700 112 800 42 L800 260 L0 260 Z"
-                  fill="url(#dashboard-chart-fill)"
-                />
-                <path
-                  d="M0 225 C70 208 95 218 145 190 S245 205 298 157 S388 173 448 120 S545 144 600 98 S700 112 800 42"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-            </div>
+            <div className="mt-7 rounded-lg border border-border/70 bg-elevated/50 p-5"><div className="flex h-3 overflow-hidden rounded-full bg-surface" role="img" aria-label="Current equity composition"><span className="bg-accent" style={{ width: `${accountEquity > 0 ? (wallet?.availableBalance || 0) / accountEquity * 100 : 0}%` }} /><span className="bg-positive" style={{ width: `${accountEquity > 0 ? openPositionsValue / accountEquity * 100 : 0}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-2"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-muted"><span className="size-2 rounded-full bg-accent" />Available cash</span><span className="financial-value">{formatCurrency(wallet?.availableBalance || 0, currency)}</span></div><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-muted"><span className="size-2 rounded-full bg-positive" />Open positions</span><span className="financial-value">{formatCurrency(openPositionsValue, currency)}</span></div></div></div>
           </div>
         </Card>
 

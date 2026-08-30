@@ -5,7 +5,6 @@ const labels = {
   reconnecting: 'Reconnecting',
   unavailable: 'Unavailable',
   stale: 'Stale',
-  demo: 'Forex Demo',
 }
 
 function MarketSourceBadge({ type, status }) {
