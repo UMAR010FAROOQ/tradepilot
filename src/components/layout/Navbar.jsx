@@ -10,6 +10,7 @@ const pageTitles = {
   '/markets': 'Markets',
   '/trade': 'Trade',
   '/portfolio': 'Portfolio',
+  '/active-trades': 'Active trades',
   '/wallet': 'Wallet',
   '/deposit': 'Deposit',
   '/withdraw': 'Withdraw',
@@ -90,7 +91,7 @@ function Navbar({ onMenuClick }) {
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-positive opacity-50" />
             <span className="relative inline-flex size-2 rounded-full bg-positive" />
           </span>
-          <span className="text-xs font-medium text-muted">Markets open</span>
+          <span className="text-xs font-medium text-muted">Market data live</span>
         </div>
         <Button aria-label="Notifications" className="relative size-9 px-0" variant="ghost">
           <Bell aria-hidden="true" className="size-[18px]" />

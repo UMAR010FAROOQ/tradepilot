@@ -9,7 +9,7 @@ import {
 
 const POLL_INTERVAL_MS = 20000
 const POLL_BATCH_SIZE = 2
-export const FOREX_FRESHNESS_THRESHOLD_MS = 120000
+export const FOREX_FRESHNESS_THRESHOLD_MS = Math.max(120000, Math.ceil(markets.filter((market) => market.type === 'forex').length / POLL_BATCH_SIZE) * POLL_INTERVAL_MS + 20000)
 export const FOREX_MARKET_SOURCE = 'Twelve Data'
 
 const configuredBaseUrl = (import.meta.env.VITE_FOREX_API_BASE_URL || '').trim().replace(/\/$/, '')
@@ -105,6 +105,7 @@ async function fetchTickers(symbols) {
 }
 
 async function demoTicker(symbol) {
+  if (symbol === 'XAUUSD') throw createServiceError('forex/live-required', 'Live Gold data is currently unavailable.')
   const ticker = await getMockTicker(symbol)
   const session = getForexSessionStatus()
   return {
@@ -149,9 +150,9 @@ async function pollSubscribers() {
     })
     .catch(async (error) => {
       notifyStatus('unavailable')
-      subscribers.forEach((entries) => entries.forEach((entry) => entry.onError?.(error)))
+      symbols.forEach((symbol) => subscribers.get(symbol)?.forEach((entry) => entry.onError?.(error)))
       if (isForexLiveConfigured) {
-        const fallbackTickers = await Promise.all(symbols.map(demoTicker))
+        const fallbackTickers = await Promise.all(symbols.filter((symbol) => symbol !== 'XAUUSD').map(demoTicker))
         fallbackTickers.forEach((ticker) => {
           tickerCache.set(ticker.symbol, ticker)
           subscribers.get(ticker.symbol)?.forEach((entry) => entry.callback(ticker))
@@ -192,7 +193,10 @@ export async function getForexTicker(symbol, options = {}) {
 
 export async function getForexHistoricalCandles(symbol, interval = '1h') {
   marketFor(symbol)
-  if (!isForexLiveConfigured) return getMockHistoricalCandles(symbol, interval)
+  if (!isForexLiveConfigured) {
+    if (symbol === 'XAUUSD') throw createServiceError('forex/live-required', 'Live Gold chart data is currently unavailable.')
+    return getMockHistoricalCandles(symbol, interval)
+  }
   const providerInterval = intervalMap[interval]
   if (!providerInterval) throw createServiceError('forex/unsupported-interval', 'This Forex chart interval is not supported.')
   const payload = await request('/time_series', { symbol: providerSymbol(symbol), interval: providerInterval, outputsize: '500', order: 'ASC', timezone: 'UTC' })

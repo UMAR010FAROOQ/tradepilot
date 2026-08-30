@@ -20,6 +20,15 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly(requiredFields);
     }
 
+    function validPakistaniPaymentMethod(data) {
+      return data.method in ['JazzCash', 'Easypaisa', 'SadaPay', 'NayaPay', 'Pakistani Bank Account'] &&
+        ((data.method in ['JazzCash', 'Easypaisa'] && data.paymentCategory == 'Mobile wallet') ||
+         (data.method in ['SadaPay', 'NayaPay'] && data.paymentCategory == 'Digital bank') ||
+         (data.method == 'Pakistani Bank Account' && data.paymentCategory == 'Bank transfer')) &&
+        ((data.method == 'Pakistani Bank Account' && data.keys().hasAll(['bankName']) && data.bankName is string && data.bankName.size() > 0) ||
+         (data.method != 'Pakistani Bank Account' && !data.keys().hasAny(['bankName'])));
+    }
+
     function validCompletedTransaction(transactionId) {
       let transactionData = request.resource.data;
       let walletBefore = get(
@@ -458,25 +467,32 @@ service cloud.firestore {
       allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
 
       allow create: if signedIn() &&
-        hasExactFields([
+        request.resource.data.keys().hasAll([
           'userId',
           'amount',
           'currency',
           'method',
+          'paymentCategory',
+          'accountHolderName',
+          'senderAccount',
           'reference',
+          'notes',
           'status',
           'createdAt',
           'updatedAt'
         ]) &&
+        request.resource.data.keys().hasOnly(['userId', 'amount', 'currency', 'method', 'paymentCategory', 'accountHolderName', 'senderAccount', 'bankName', 'reference', 'notes', 'status', 'createdAt', 'updatedAt']) &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.amount is number &&
         request.resource.data.amount > 0 &&
         request.resource.data.currency == 'USD' &&
-        request.resource.data.method is string &&
-        request.resource.data.method.size() > 0 &&
-        request.resource.data.method in ['Bank Transfer', 'USDT', 'BTC'] &&
+        validPakistaniPaymentMethod(request.resource.data) &&
+        request.resource.data.accountHolderName is string && request.resource.data.accountHolderName.size() > 0 && request.resource.data.accountHolderName.size() <= 120 &&
+        request.resource.data.senderAccount is string && request.resource.data.senderAccount.size() > 0 && request.resource.data.senderAccount.size() <= 80 &&
         request.resource.data.reference is string &&
         request.resource.data.reference.size() > 0 &&
+        request.resource.data.reference.size() <= 120 &&
+        request.resource.data.notes is string && request.resource.data.notes.size() <= 500 &&
         request.resource.data.status == 'pending' &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
@@ -489,25 +505,29 @@ service cloud.firestore {
       allow read: if (signedIn() && resource.data.userId == request.auth.uid) || isAdmin();
 
       allow create: if signedIn() &&
-        hasExactFields([
+        request.resource.data.keys().hasAll([
           'userId',
           'amount',
           'currency',
           'method',
-          'destination',
+          'paymentCategory',
+          'accountHolderName',
+          'destinationAccount',
+          'notes',
           'status',
           'createdAt',
           'updatedAt'
         ]) &&
+        request.resource.data.keys().hasOnly(['userId', 'amount', 'currency', 'method', 'paymentCategory', 'accountHolderName', 'destinationAccount', 'bankName', 'notes', 'status', 'createdAt', 'updatedAt']) &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.amount is number &&
         request.resource.data.amount > 0 &&
         request.resource.data.currency == 'USD' &&
-        request.resource.data.method is string &&
-        request.resource.data.method.size() > 0 &&
-        request.resource.data.method in ['Bank Transfer', 'USDT', 'BTC'] &&
-        request.resource.data.destination is string &&
-        request.resource.data.destination.size() > 0 &&
+        validPakistaniPaymentMethod(request.resource.data) &&
+        request.resource.data.accountHolderName is string && request.resource.data.accountHolderName.size() > 0 && request.resource.data.accountHolderName.size() <= 120 &&
+        request.resource.data.destinationAccount is string &&
+        request.resource.data.destinationAccount.size() > 0 && request.resource.data.destinationAccount.size() <= 80 &&
+        request.resource.data.notes is string && request.resource.data.notes.size() <= 500 &&
         request.resource.data.amount <=
           get(/databases/$(database)/documents/wallets/$(request.auth.uid))
             .data.availableBalance &&

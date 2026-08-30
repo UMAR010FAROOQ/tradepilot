@@ -12,6 +12,7 @@ import { AdminEmpty, AdminError, AdminLoading } from './AdminState.jsx'
 import { getFirestoreErrorMessage } from '../../utils/firestoreErrors.js'
 import { formatCurrency } from '../../utils/formatCurrency.js'
 import { formatAdminDate, statusVariant } from '../../utils/adminFormatters.js'
+import { requestAccount } from '../../utils/paymentDetails.js'
 
 function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest }) {
   const [items, setItems] = useState([])
@@ -40,7 +41,7 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
   }, [loadRequests])
 
   const visible = useMemo(() => items.filter((item) => {
-    const text = `${item.userId} ${item.reference || ''} ${item.destination || ''} ${item.method || ''}`.toLowerCase()
+    const text = `${item.userId} ${item.reference || ''} ${requestAccount(item)} ${item.method || ''} ${item.accountHolderName || ''} ${item.bankName || ''}`.toLowerCase()
     return (status === 'all' || item.status === status) && text.includes(search.toLowerCase())
   }), [items, search, status])
 
@@ -79,14 +80,15 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left">
               <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted">
-                <tr><th className="px-5 py-3">Amount</th><th className="px-5 py-3">Method</th><th className="px-5 py-3">Reference / destination</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th><th className="px-5 py-3 text-right">Actions</th></tr>
+                <tr><th className="px-5 py-3">Amount</th><th className="px-5 py-3">Method</th><th className="px-5 py-3">Account details</th><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th><th className="px-5 py-3 text-right">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {visible.map((item) => (
                   <tr key={item.id}>
                     <td className="financial-value px-5 py-4 text-sm font-semibold">{formatCurrency(item.amount, item.currency)}</td>
-                    <td className="px-5 py-4 text-sm">{item.method}</td>
-                    <td className="max-w-48 truncate px-5 py-4 text-xs text-muted" title={item.reference || item.destination}>{item.reference || item.destination}</td>
+                    <td className="px-5 py-4 text-sm"><p>{item.method}</p><p className="mt-0.5 text-xs text-muted">{item.paymentCategory || 'Legacy method'}</p></td>
+                    <td className="max-w-56 px-5 py-4 text-xs"><p>{item.accountHolderName || 'Legacy request'}</p><p className="mt-1 text-muted">{item.bankName ? `${item.bankName} · ` : ''}{requestAccount(item) || '—'}</p></td>
+                    <td className="max-w-40 truncate px-5 py-4 text-xs text-muted" title={item.reference}>{item.reference || '—'}</td>
                     <td className="px-5 py-4"><Badge variant={statusVariant(item.status)}>{item.status}</Badge></td>
                     <td className="px-5 py-4 text-xs text-muted">{formatAdminDate(item.createdAt)}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2">{item.status === 'pending' ? <><Button onClick={() => setDialog({ action: 'approve', item })} size="sm" variant="success"><Check className="size-3.5" />Approve</Button><Button onClick={() => setDialog({ action: 'reject', item })} size="sm" variant="danger"><X className="size-3.5" />Reject</Button></> : <span className="text-xs text-muted">Processed</span>}</div></td>
@@ -104,7 +106,7 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
         onClose={() => !processing && setDialog(null)}
         title={`${dialog?.action === 'approve' ? 'Approve' : 'Reject'} ${type}`}
       >
-        {dialog?.action === 'approve' ? <p className="text-sm text-muted">This updates the wallet and creates a completed audit transaction in one atomic operation.</p> : <Input autoFocus label="Rejection reason" onChange={(event) => setReason(event.target.value)} placeholder="Explain why this request was rejected" value={reason} />}
+        {dialog?.action === 'approve' ? <div className="space-y-3"><p className="text-sm font-semibold text-warning">Confirm the payment outside TradePilot before approving.</p><p className="text-sm text-muted">Approval updates the wallet and creates a completed audit transaction atomically. TradePilot does not verify manual payments automatically.</p></div> : <Input autoFocus label="Rejection reason" onChange={(event) => setReason(event.target.value)} placeholder="Explain why this request was rejected" value={reason} />}
       </Modal>
     </div>
   )

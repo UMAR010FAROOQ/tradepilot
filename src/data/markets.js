@@ -19,6 +19,7 @@ export const markets = [
   { symbol: 'EURJPY', displaySymbol: 'EUR/JPY', name: 'Euro / Japanese Yen', type: 'forex', baseAsset: 'EUR', quoteAsset: 'JPY', category: 'Forex' },
   { symbol: 'GBPJPY', displaySymbol: 'GBP/JPY', name: 'British Pound / Japanese Yen', type: 'forex', baseAsset: 'GBP', quoteAsset: 'JPY', category: 'Forex' },
   { symbol: 'EURGBP', displaySymbol: 'EUR/GBP', name: 'Euro / British Pound', type: 'forex', baseAsset: 'EUR', quoteAsset: 'GBP', category: 'Forex' },
+  { symbol: 'XAUUSD', displaySymbol: 'XAU/USD', name: 'Gold / US Dollar', type: 'forex', baseAsset: 'XAU', quoteAsset: 'USD', category: 'Metals' },
 ]
 
 export const marketBySymbol = new Map(markets.map((market) => [market.symbol, market]))

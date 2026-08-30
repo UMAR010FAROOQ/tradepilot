@@ -13,7 +13,7 @@ import { addSymbol, removeSymbol, subscribeToWatchlist } from '../services/watch
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { formatPrice, formatVolume } from '../utils/marketFormatters.js'
 
-const tabs = ['All', 'Crypto', 'Forex']
+const tabs = ['All', 'Crypto', 'Forex', 'Metals']
 
 function Markets() {
   const [markets, setMarkets] = useState([])
@@ -26,6 +26,7 @@ function Markets() {
   const [pending, setPending] = useState('')
   const [cryptoStatus, setCryptoStatus] = useState('connecting')
   const [forexStatus, setForexStatus] = useState('connecting')
+  const [unavailableSymbols, setUnavailableSymbols] = useState(new Set())
   const { currentUser } = useAuth()
   const navigate = useNavigate()
 
@@ -59,8 +60,9 @@ function Markets() {
     if (markets.length === 0) return undefined
     const unsubscribe = markets.map((market) => subscribeToTicker(
       market.symbol,
-      (ticker) => setTickers((current) => new Map(current).set(ticker.symbol, ticker)),
+      (ticker) => { setTickers((current) => new Map(current).set(ticker.symbol, ticker)); setUnavailableSymbols((current) => { const next = new Set(current); next.delete(ticker.symbol); return next }) },
       () => {
+        setUnavailableSymbols((current) => new Set(current).add(market.symbol))
         if (market.type === 'crypto') setError('Live crypto updates are temporarily unavailable.')
         else setForexStatus('unavailable')
       },
@@ -108,12 +110,13 @@ function Markets() {
             <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">Market</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Price</th><th className="px-5 py-3">24h change</th><th className="px-5 py-3">24h high</th><th className="px-5 py-3">24h low</th><th className="px-5 py-3">Volume</th><th className="px-5 py-3 text-center">Watchlist</th></tr></thead>
             <tbody className="divide-y divide-border">{visible.map((market) => {
               const ticker = tickers.get(market.symbol)
+              const isUnavailable = unavailableSymbols.has(market.symbol)
               const openTrade = () => navigate(`/trade?symbol=${market.symbol}`)
               return <tr className="cursor-pointer transition hover:bg-elevated/50" key={market.symbol} onClick={openTrade} onKeyDown={(event) => { if (event.key === 'Enter') openTrade() }} tabIndex={0}>
                 <td className="px-5 py-4"><p className="text-sm font-semibold">{market.displaySymbol}</p><p className="text-xs text-muted">{market.name}</p></td>
-                <td className="px-5 py-4">{market.type === 'crypto' ? <span className="text-xs font-medium text-positive">Open</span> : <span className={`text-xs font-medium ${ticker?.marketStatus === 'Open' ? 'text-positive' : 'text-negative'}`}>{ticker?.marketStatus || 'Unavailable'}</span>}</td>
+                <td className="px-5 py-4">{market.type === 'crypto' ? <span className="text-xs font-medium text-positive">Open</span> : <span className={`text-xs font-medium ${ticker?.marketStatus === 'Open' ? 'text-positive' : isUnavailable ? 'text-negative' : 'text-muted'}`}>{ticker?.marketStatus || (isUnavailable ? 'Unavailable' : 'Waiting for quote')}</span>}</td>
                 <td className="financial-value px-5 py-4 text-sm">{formatPrice(ticker?.price, market)}</td>
-                <td className="px-5 py-4">{ticker ? <PriceChange amount={ticker.change} showAmount value={ticker.changePercent} /> : <span className="text-xs text-negative">Unavailable</span>}</td>
+                <td className="px-5 py-4">{ticker ? <PriceChange amount={ticker.change} showAmount value={ticker.changePercent} /> : <span className={`text-xs ${isUnavailable ? 'text-negative' : 'text-muted'}`}>{isUnavailable ? 'Unavailable' : 'Waiting for quote'}</span>}</td>
                 <td className="financial-value px-5 py-4 text-sm text-muted">{formatPrice(ticker?.high24h, market)}</td>
                 <td className="financial-value px-5 py-4 text-sm text-muted">{formatPrice(ticker?.low24h, market)}</td>
                 <td className="financial-value px-5 py-4 text-sm text-muted">{formatVolume(ticker?.volume24h)}</td>

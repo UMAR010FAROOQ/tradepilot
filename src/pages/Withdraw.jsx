@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, CircleAlert, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/common/Button.jsx'
@@ -6,154 +6,22 @@ import Card from '../components/common/Card.jsx'
 import Input from '../components/common/Input.jsx'
 import PageHeader from '../components/common/PageHeader.jsx'
 import Select from '../components/common/Select.jsx'
+import Textarea from '../components/common/Textarea.jsx'
+import { isBankMethod, pakistaniBanks, paymentMethodByValue, paymentMethods } from '../data/paymentMethods.js'
 import useAuth from '../hooks/useAuth.js'
 import useWallet from '../hooks/useWallet.js'
 import { createWithdrawalRequest } from '../services/withdrawalService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 
+const emptyForm = { amount: '', method: '', accountHolderName: '', destinationAccount: '', bank: '', customBank: '', notes: '' }
 function Withdraw() {
-  const [form, setForm] = useState({ amount: '', method: '', destination: '' })
-  const [error, setError] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isComplete, setIsComplete] = useState(false)
-  const { currentUser } = useAuth()
-  const { wallet, loading: walletLoading, error: walletError } = useWallet()
-  const navigate = useNavigate()
-  const availableBalance = wallet?.availableBalance
-
-  const updateField = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }))
-    setError('')
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    setError('')
-    const numericAmount = Number(form.amount)
-
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError('Enter an amount greater than zero.')
-      return
-    }
-    if (typeof availableBalance !== 'number') {
-      setError('Your wallet balance is not available yet.')
-      return
-    }
-    if (numericAmount > availableBalance) {
-      setError('The withdrawal amount cannot exceed your available balance.')
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      await createWithdrawalRequest({
-        userId: currentUser.uid,
-        amount: numericAmount,
-        method: form.method,
-        destination: form.destination,
-      })
-      setIsComplete(true)
-    } catch (requestError) {
-      setError(getFirestoreErrorMessage(requestError))
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  if (isComplete) {
-    return (
-      <div className="space-y-6">
-        <PageHeader eyebrow="Wallet" title="Withdrawal request" />
-        <Card className="max-w-xl text-center" padding="lg">
-          <span className="mx-auto grid size-12 place-items-center rounded-xl bg-positive/10 text-positive">
-            <CheckCircle2 aria-hidden="true" className="size-6" />
-          </span>
-          <h2 className="mt-5 text-lg font-semibold">Request submitted</h2>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Your withdrawal is pending review. No wallet balance has been deducted.
-          </p>
-          <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
-            <Button onClick={() => navigate('/transactions')} variant="secondary">
-              View transactions
-            </Button>
-            <Button onClick={() => navigate('/wallet')}>Return to wallet</Button>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        actions={
-          <Button onClick={() => navigate('/wallet')} variant="ghost">
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            Wallet
-          </Button>
-        }
-        description="Create a pending withdrawal request without changing your balance."
-        eyebrow="Wallet"
-        title="Withdraw funds"
-      />
-
-      <div className="grid max-w-4xl gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <Card padding="lg">
-          {(error || walletError) && (
-            <div className="mb-5 flex gap-2.5 rounded-lg border border-negative/25 bg-negative/10 p-3 text-sm text-negative" role="alert">
-              <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <p>{error || walletError}</p>
-            </div>
-          )}
-          <form className="grid gap-5" noValidate onSubmit={handleSubmit}>
-            <Input
-              hint={
-                walletLoading
-                  ? 'Loading available balance…'
-                  : `Available: ${formatCurrency(availableBalance, wallet?.currency || 'USD')}`
-              }
-              inputMode="decimal"
-              label="Amount (USD)"
-              min="0.01"
-              onChange={updateField('amount')}
-              placeholder="0.00"
-              step="0.01"
-              type="number"
-              value={form.amount}
-            />
-            <Select label="Withdrawal method" onChange={updateField('method')} value={form.method}>
-              <option value="">Select a method</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="USDT">USDT</option>
-              <option value="BTC">BTC</option>
-            </Select>
-            <Input
-              label="Destination"
-              onChange={updateField('destination')}
-              placeholder="Bank details or wallet address"
-              value={form.destination}
-            />
-            <Button disabled={isSubmitting || walletLoading || !wallet} size="lg" type="submit">
-              {isSubmitting && <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />}
-              {isSubmitting ? 'Submitting…' : 'Submit withdrawal request'}
-            </Button>
-          </form>
-        </Card>
-
-        <Card className="h-fit">
-          <span className="grid size-9 place-items-center rounded-lg bg-accent/10 text-accent">
-            <ShieldCheck aria-hidden="true" className="size-4" />
-          </span>
-          <h2 className="mt-4 text-sm font-semibold">Balance protected</h2>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Requests remain pending. The frontend cannot deduct funds or approve withdrawals.
-          </p>
-        </Card>
-      </div>
-    </div>
-  )
+  const [form, setForm] = useState(emptyForm); const [error, setError] = useState(''); const [submitting, setSubmitting] = useState(false); const [complete, setComplete] = useState(false)
+  const { currentUser } = useAuth(); const { wallet, loading, error: walletError } = useWallet(); const navigate = useNavigate()
+  const method = paymentMethodByValue.get(form.method); const bankName = form.bank === 'Other' ? form.customBank : form.bank; const groups = useMemo(() => [...new Set(paymentMethods.map((item) => item.category))], [])
+  const update = (field) => (event) => { setForm((current) => ({ ...current, [field]: event.target.value })); setError('') }
+  const submit = async (event) => { event.preventDefault(); setError(''); const amount = Number(form.amount); if (!Number.isFinite(amount) || amount <= 0) return setError('Enter an amount greater than zero.'); if (amount > (wallet?.availableBalance ?? -1)) return setError('The withdrawal amount cannot exceed your available balance.'); setSubmitting(true); try { await createWithdrawalRequest({ ...form, bankName, userId: currentUser.uid }); setComplete(true) } catch (requestError) { setError(getFirestoreErrorMessage(requestError)) } finally { setSubmitting(false) } }
+  if (complete) return <div className="space-y-6"><PageHeader eyebrow="Wallet" title="Withdrawal request" /><Card className="max-w-xl text-center" padding="lg"><span className="mx-auto grid size-12 place-items-center rounded-xl bg-positive/10 text-positive"><CheckCircle2 className="size-6" /></span><h2 className="mt-5 text-lg font-semibold">Request submitted</h2><p className="mt-2 text-sm text-muted">Your manual withdrawal is pending review. No balance has been deducted.</p><div className="mt-6 flex justify-center gap-2"><Button onClick={() => navigate('/transactions')} variant="secondary">View transactions</Button><Button onClick={() => navigate('/wallet')}>Wallet</Button></div></Card></div>
+  return <div className="space-y-6"><PageHeader actions={<Button onClick={() => navigate('/wallet')} variant="ghost"><ArrowLeft className="size-4" />Wallet</Button>} description="Request a manual payout to a supported Pakistani account." eyebrow="Wallet" title="Withdraw funds" /><div className="grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"><Card padding="lg">{(error || walletError) && <div className="mb-5 flex gap-2 rounded-lg border border-negative/25 bg-negative/10 p-3 text-sm text-negative" role="alert"><CircleAlert className="size-4" />{error || walletError}</div>}<form className="grid gap-5" noValidate onSubmit={submit}><Input hint={loading ? 'Loading balance…' : `Available: ${formatCurrency(wallet?.availableBalance, wallet?.currency)}`} inputMode="decimal" label="Amount (USD)" min="0.01" onChange={update('amount')} step="0.01" type="number" value={form.amount} /><Select label="Payout method" onChange={update('method')} value={form.method}><option value="">Select a method</option>{groups.map((group) => <optgroup key={group} label={group}>{paymentMethods.filter((item) => item.category === group).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</optgroup>)}</Select>{method && <><Input label="Account holder name" onChange={update('accountHolderName')} placeholder="Name on receiving account" value={form.accountHolderName} />{isBankMethod(form.method) && <><Select label="Receiving bank" onChange={update('bank')} value={form.bank}><option value="">Select a bank</option>{pakistaniBanks.map((bank) => <option key={bank} value={bank}>{bank}</option>)}</Select>{form.bank === 'Other' && <Input label="Bank name" onChange={update('customBank')} value={form.customBank} />}</>}<Input inputMode={method.category === 'Mobile wallet' ? 'tel' : 'text'} label={method.accountLabel} onChange={update('destinationAccount')} placeholder={method.placeholder} value={form.destinationAccount} /><Textarea label="Notes (optional)" maxLength="500" onChange={update('notes')} value={form.notes} /></>}<Button disabled={submitting || loading || !wallet} size="lg" type="submit">{submitting && <LoaderCircle className="size-4 animate-spin" />}{submitting ? 'Submitting…' : 'Submit withdrawal request'}</Button></form></Card><Card className="h-fit"><ShieldCheck className="size-5 text-accent" /><h2 className="mt-3 text-sm font-semibold">Manual payout review</h2><p className="mt-2 text-xs leading-5 text-muted">Account details are shown to authorized administrators for verification. Never provide a PIN or one-time password.</p></Card></div></div>
 }
-
 export default Withdraw

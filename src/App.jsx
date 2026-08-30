@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Markets from './pages/Markets.jsx'
 import Trade from './pages/Trade.jsx'
 import Portfolio from './pages/Portfolio.jsx'
+import ActiveTrades from './pages/ActiveTrades.jsx'
 import Wallet from './pages/Wallet.jsx'
 import Deposit from './pages/Deposit.jsx'
 import Withdraw from './pages/Withdraw.jsx'
@@ -49,6 +50,7 @@ function App() {
               <Route path="markets" element={<Markets />} />
               <Route path="trade" element={<Trade />} />
               <Route path="portfolio" element={<Portfolio />} />
+              <Route path="active-trades" element={<ActiveTrades />} />
               <Route path="wallet" element={<Wallet />} />
               <Route path="deposit" element={<Deposit />} />
               <Route path="withdraw" element={<Withdraw />} />

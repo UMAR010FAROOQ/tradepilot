@@ -9,6 +9,7 @@ import { subscribeToWithdrawalRequests } from '../services/withdrawalService.js'
 import { subscribeToTrades } from '../services/tradeService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
+import { maskAccount, requestAccount } from '../utils/paymentDetails.js'
 
 const tabs = ['All', 'Deposits', 'Withdrawals', 'Trades']
 
@@ -174,6 +175,7 @@ function Transactions() {
                   <th className="px-5 py-3 font-semibold">Type</th>
                   <th className="px-5 py-3 font-semibold">Amount</th>
                   <th className="px-5 py-3 font-semibold">Method</th>
+                  <th className="px-5 py-3 font-semibold">Account</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                   <th className="px-5 py-3 font-semibold">Date</th>
                 </tr>
@@ -195,6 +197,7 @@ function Transactions() {
                       {formatCurrency(item.amount, item.currency)}
                     </td>
                     <td className="px-5 py-4 text-sm text-muted">{item.method}</td>
+                    <td className="financial-value px-5 py-4 text-sm text-muted">{maskAccount(requestAccount(item))}</td>
                     <td className="px-5 py-4">
                       <Badge variant={item.status === 'pending' ? 'warning' : 'neutral'}>
                         {item.status}

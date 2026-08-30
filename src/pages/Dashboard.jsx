@@ -19,21 +19,12 @@ import { getTicker, subscribeToTicker } from '../services/marketService.js'
 import { subscribeToPositions } from '../services/positionService.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 import { calculatePositionPnl } from '../utils/pnl.js'
+import { getRecentTrades } from '../services/tradeService.js'
+import { marketBySymbol } from '../data/markets.js'
+import { formatPrice } from '../utils/marketFormatters.js'
 
-const activities = [
-  { label: 'BTC position adjusted', time: '12 minutes ago', value: '+$184.20', positive: true },
-  { label: 'EUR/USD position closed', time: '2 hours ago', value: '+$62.80', positive: true },
-  { label: 'Wallet withdrawal', time: 'Yesterday', value: '-$500.00', positive: false },
-]
-
-const watchlist = [
-  { symbol: 'EUR/USD', price: '1.08642', change: '+0.24%', positive: true },
-  { symbol: 'BTC/USD', price: '68,420.10', change: '+1.82%', positive: true },
-  { symbol: 'ETH/USD', price: '3,582.46', change: '-0.38%', positive: false },
-  { symbol: 'GBP/JPY', price: '201.485', change: '+0.12%', positive: true },
-]
-
-const overviewSymbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD']
+const overviewSymbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'XAUUSD']
+const formatTradeDate = (timestamp) => timestamp?.toDate?.().toLocaleString() || 'Pending timestamp'
 
 function Dashboard() {
   const { currentUser, userProfile } = useAuth()
@@ -42,6 +33,7 @@ function Dashboard() {
   const [positions, setPositions] = useState([])
   const [positionTickers, setPositionTickers] = useState(new Map())
   const [positionsLoading, setPositionsLoading] = useState(true)
+  const [recentTrades, setRecentTrades] = useState([])
   const navigate = useNavigate()
   const firstName = (userProfile?.fullName || currentUser?.displayName || '').trim().split(/\s+/)[0]
   const currency = wallet?.currency || 'USD'
@@ -50,6 +42,7 @@ function Dashboard() {
   const positionValues = openPositions.map((position) => calculatePositionPnl(position, positionTickers.get(position.symbol)?.price))
   const openPositionsValue = positionValues.reduce((total, value) => total + (value.marketValue || 0), 0)
   const unrealizedPnl = positionValues.reduce((total, value) => total + (value.unrealizedPnl || 0), 0)
+  const realizedPnl = positions.reduce((total, position) => total + (position.realizedPnl || 0), 0)
   const accountEquity = (wallet?.availableBalance || 0) + openPositionsValue
   const accountLoading = walletLoading || positionsLoading
   const metrics = [
@@ -77,6 +70,8 @@ function Dashboard() {
       detail: 'Live frontend valuation',
       icon: ArrowUpRight,
     },
+    { label: 'Realized P/L', value: formatCurrency(realizedPnl, currency), detail: 'Closed simulated quantities', icon: ArrowDownLeft },
+    { label: 'Active trades', value: String(openPositions.length), detail: 'Long-only open positions', icon: BriefcaseBusiness },
   ]
 
   useEffect(() => {
@@ -90,6 +85,7 @@ function Dashboard() {
   }, [])
 
   useEffect(() => subscribeToPositions(currentUser.uid, (items) => { setPositions(items); setPositionsLoading(false) }, () => setPositionsLoading(false)), [currentUser.uid])
+  useEffect(() => { let active = true; getRecentTrades(currentUser.uid, 5).then((items) => active && setRecentTrades(items)).catch(() => {}); return () => { active = false } }, [currentUser.uid])
 
   useEffect(() => {
     const unsubscribe = positionSymbols.map((symbol) => subscribeToTicker(symbol, (ticker) => setPositionTickers((current) => new Map(current).set(symbol, ticker))))
@@ -140,7 +136,7 @@ function Dashboard() {
         </div>
       )}
 
-      <section aria-label="Account summary" className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+      <section aria-label="Account summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {metrics.map(({ label, value, detail, icon: Icon }) => (
           <Card className="min-w-0" key={label}>
             <div className="flex items-start justify-between gap-4">
@@ -169,7 +165,7 @@ function Dashboard() {
           <Button onClick={() => navigate('/markets')} size="sm" variant="ghost">All markets</Button>
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
-          {['crypto', 'forex'].map((type) => <div key={type}><h3 className="mb-2 text-xs font-semibold capitalize text-muted">{type} market overview</h3><div className="grid gap-3 sm:grid-cols-2">{overviewSymbols.filter((symbol) => (type === 'crypto' ? symbol.endsWith('USDT') : !symbol.endsWith('USDT'))).map((symbol) => { const ticker = marketTickers.get(symbol); return ticker ? <MarketCard key={symbol} onClick={() => navigate(`/trade?symbol=${symbol}`)} ticker={ticker} /> : <span className="h-36 rounded-xl border border-border bg-surface p-4 text-xs text-muted" key={symbol}>Market data unavailable</span> })}</div></div>)}
+          {['crypto', 'forex'].map((type) => <div key={type}><h3 className="mb-2 text-xs font-semibold capitalize text-muted">{type} market overview</h3><div className="grid gap-3 sm:grid-cols-2">{overviewSymbols.filter((symbol) => (type === 'crypto' ? symbol.endsWith('USDT') : !symbol.endsWith('USDT'))).map((symbol) => { const ticker = marketTickers.get(symbol); return ticker ? <MarketCard key={symbol} onClick={() => navigate(`/trade?symbol=${symbol}`)} ticker={ticker} /> : <span className="h-36 rounded-xl border border-border bg-surface p-4 text-xs text-muted" key={symbol}>Waiting for quote…</span> })}</div></div>)}
         </div>
       </section>
 
@@ -230,23 +226,23 @@ function Dashboard() {
               <h2 className="text-sm font-semibold">Watchlist</h2>
               <p className="mt-1 text-xs text-muted">Selected markets</p>
             </div>
-            <Button className="h-8 px-2.5" size="sm" variant="ghost">View all</Button>
+            <Button className="h-8 px-2.5" onClick={() => navigate('/markets')} size="sm" variant="ghost">View all</Button>
           </div>
           <div className="divide-y divide-border">
-            {watchlist.map((item) => (
-              <div className="flex items-center justify-between gap-4 px-5 py-4" key={item.symbol}>
+            {overviewSymbols.map((symbol) => { const item = marketTickers.get(symbol); const market = marketBySymbol.get(symbol); return (
+              <button className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-elevated/40" key={symbol} onClick={() => navigate(`/trade?symbol=${symbol}`)} type="button">
                 <div>
-                  <p className="text-sm font-semibold">{item.symbol}</p>
-                  <p className="mt-0.5 text-[11px] text-muted">Spot market</p>
+                  <p className="text-sm font-semibold">{market.displaySymbol}</p>
+                  <p className="mt-0.5 text-[11px] text-muted">{market.category}</p>
                 </div>
                 <div className="text-right">
-                  <p className="financial-value text-sm">{item.price}</p>
-                  <p className={`financial-value mt-0.5 text-xs ${item.positive ? 'text-positive' : 'text-negative'}`}>
-                    {item.change}
+                  <p className="financial-value text-sm">{item ? formatPrice(item.price, market) : 'Waiting…'}</p>
+                  <p className={`financial-value mt-0.5 text-xs ${(item?.changePercent || 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
+                    {item ? `${item.changePercent >= 0 ? '+' : ''}${item.changePercent.toFixed(2)}%` : '—'}
                   </p>
                 </div>
-              </div>
-            ))}
+              </button>
+            )})}
           </div>
         </Card>
       </div>
@@ -257,26 +253,26 @@ function Dashboard() {
             <h2 className="text-sm font-semibold">Recent activity</h2>
             <p className="mt-1 text-xs text-muted">Latest account events</p>
           </div>
-          <Button size="sm" variant="ghost">All transactions</Button>
+          <Button onClick={() => navigate('/transactions')} size="sm" variant="ghost">All transactions</Button>
         </div>
         <div className="divide-y divide-border">
-          {activities.map((activity) => (
-            <div className="flex items-center justify-between gap-4 px-5 py-4" key={activity.label}>
+          {recentTrades.length === 0 ? <div className="px-5 py-8 text-center text-sm text-muted">No simulated trades yet.</div> : recentTrades.map((trade) => (
+            <div className="flex items-center justify-between gap-4 px-5 py-4" key={trade.id}>
               <div className="flex min-w-0 items-center gap-3">
-                <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${activity.positive ? 'bg-positive/10 text-positive' : 'bg-negative/10 text-negative'}`}>
-                  {activity.positive ? (
+                <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${trade.side === 'BUY' ? 'bg-positive/10 text-positive' : 'bg-negative/10 text-negative'}`}>
+                  {trade.side === 'BUY' ? (
                     <ArrowUpRight aria-hidden="true" className="size-4" />
                   ) : (
                     <ArrowDownLeft aria-hidden="true" className="size-4" />
                   )}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{activity.label}</p>
-                  <p className="mt-0.5 text-xs text-muted">{activity.time}</p>
+                  <p className="truncate text-sm font-medium">{trade.side} {trade.symbol}</p>
+                  <p className="mt-0.5 text-xs text-muted">{formatTradeDate(trade.createdAt)}</p>
                 </div>
               </div>
-              <p className={`financial-value shrink-0 text-sm ${activity.positive ? 'text-positive' : 'text-negative'}`}>
-                {activity.value}
+              <p className={`financial-value shrink-0 text-sm ${trade.side === 'SELL' && trade.realizedPnl < 0 ? 'text-negative' : 'text-positive'}`}>
+                {formatCurrency(trade.side === 'SELL' ? trade.realizedPnl : trade.grossAmount, currency)}
               </p>
             </div>
           ))}

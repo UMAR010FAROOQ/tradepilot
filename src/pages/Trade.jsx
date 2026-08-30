@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Activity, ChartCandlestick, Clock, Maximize, Settings } from 'lucide-react'
+import { Activity, ChartCandlestick, Clock, Maximize, Minimize } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Card from '../components/common/Card.jsx'
 import IconButton from '../components/common/IconButton.jsx'
@@ -35,6 +35,7 @@ function Trade() {
   const [position, setPosition] = useState(null)
   const [positionLoading, setPositionLoading] = useState(true)
   const [tradeNotice, setTradeNotice] = useState('')
+  const [chartExpanded, setChartExpanded] = useState(false)
   const { currentUser } = useAuth()
   const { wallet } = useWallet()
   const navigate = useNavigate()
@@ -74,6 +75,13 @@ function Trade() {
   ] : [], [market, ticker])
   const forexSession = market.type === 'forex' ? getForexSessionStatus() : null
 
+  useEffect(() => {
+    if (!chartExpanded) return undefined
+    const close = (event) => { if (event.key === 'Escape') setChartExpanded(false) }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [chartExpanded])
+
   const selectSymbol = (nextSymbol) => {
     setLoading(true)
     setTicker(null)
@@ -100,10 +108,10 @@ function Trade() {
       </Card>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="min-w-0" padding="none">
+        <Card className={chartExpanded ? 'fixed inset-3 z-50 min-w-0 overflow-auto bg-surface sm:inset-6' : 'min-w-0'} padding="none">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
             <div className="flex items-center gap-2"><ChartCandlestick className="size-4 text-accent" /><span className="text-xs font-semibold">Price chart</span></div>
-            <div className="flex items-center gap-1">{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<IconButton aria-label="Chart settings placeholder" className="ml-1" icon={Settings} size="sm" title="Chart settings" /><IconButton aria-label="Maximize chart placeholder" icon={Maximize} size="sm" title="Maximize chart" /></div>
+            <div className="flex items-center gap-1">{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<IconButton aria-label={chartExpanded ? 'Restore chart' : 'Expand chart'} className="ml-1" icon={chartExpanded ? Minimize : Maximize} onClick={() => setChartExpanded((value) => !value)} size="sm" title={chartExpanded ? 'Restore chart' : 'Expand chart'} /></div>
           </div>
           {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={ticker?.price} symbol={symbol} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
         </Card>

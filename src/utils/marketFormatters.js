@@ -3,7 +3,8 @@ export function formatPrice(value, market) {
   const symbol = typeof market === 'string' ? market : market?.symbol
   const type = typeof market === 'object' ? market?.type : symbol?.endsWith('USDT') ? 'crypto' : 'forex'
   let digits = 2
-  if (type === 'forex') digits = symbol?.includes('JPY') ? 3 : 5
+  if (symbol === 'XAUUSD') digits = 2
+  else if (type === 'forex') digits = symbol?.includes('JPY') ? 3 : 5
   else if (value < 1) digits = 5
   else if (value < 100) digits = 3
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)

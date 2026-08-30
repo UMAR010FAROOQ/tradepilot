@@ -52,7 +52,7 @@ function Portfolio() {
   ]
 
   return <div className="space-y-6">
-    <PageHeader description="Live simulated position values. Market prices are not written to Firestore." eyebrow="Trading" title="Portfolio" />
+    <PageHeader actions={<Button onClick={() => navigate('/active-trades')} variant="secondary">Manage active trades</Button>} description="Live simulated position values. Market prices are not written to Firestore." eyebrow="Trading" title="Portfolio" />
     {error && <div className="flex gap-2 rounded-lg border border-negative/25 bg-negative/10 p-3 text-sm text-negative" role="alert"><CircleAlert className="size-4" />{error}</div>}
     <section aria-label="Portfolio summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{metrics.map(([label, value, numericValue]) => <Card key={label}><p className="text-xs text-muted">{label}</p>{loading || walletLoading ? <span className="mt-3 block h-7 w-28 animate-pulse rounded bg-elevated" /> : <p className={`financial-value mt-3 text-lg font-semibold ${label.includes('P/L') ? numericValue >= 0 ? 'text-positive' : 'text-negative' : ''}`}>{value}</p>}</Card>)}</section>
     <Card padding="none">
