@@ -23,7 +23,7 @@ import { subscribeToTrades } from '../services/tradeService.js'
 import { marketBySymbol } from '../data/markets.js'
 import { formatPrice } from '../utils/marketFormatters.js'
 
-const overviewSymbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'XAUUSD']
+const overviewSymbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD']
 const formatTradeDate = (timestamp) => timestamp?.toDate?.().toLocaleString() || 'Pending timestamp'
 
 function Dashboard() {

@@ -31,7 +31,7 @@ function AdminSidebar({ className, mobile = false, onClose }) {
         </div>
         {mobile && <Button aria-label="Close navigation" className="size-9 px-0" onClick={onClose} variant="ghost"><X className="size-4" /></Button>}
       </div>
-      <nav aria-label="Admin navigation" className="flex-1 space-y-1 p-3">
+      <nav aria-label="Admin navigation" className="sidebar-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
         {links.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             className={({ isActive }) => cn('flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted transition hover:bg-elevated hover:text-foreground', isActive && 'bg-accent/12 text-accent')}

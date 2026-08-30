@@ -105,7 +105,7 @@ function Sidebar({ mobile = false, onClose, className }) {
         )}
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+      <nav className="sidebar-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-4">
         {navigationGroups.map((group, groupIndex) => (
           <div className={cn(groupIndex > 0 && 'mt-6')} key={group.label}>
             <p
