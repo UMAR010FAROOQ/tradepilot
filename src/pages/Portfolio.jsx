@@ -28,7 +28,7 @@ function Portfolio() {
 
   useEffect(() => {
     let active = true
-    Promise.allSettled(openPositions.map((position) => getTicker(position.symbol))).then((results) => {
+    Promise.allSettled(openPositions.filter((position) => position.marketType === 'crypto').map((position) => getTicker(position.symbol))).then((results) => {
       if (!active) return
       const tickers = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
       setPrices(new Map(tickers.map((ticker) => [ticker.symbol, ticker])))

@@ -81,7 +81,7 @@ function Dashboard() {
 
   useEffect(() => {
     let active = true
-    Promise.allSettled(overviewSymbols.map(getTicker)).then((results) => {
+    Promise.allSettled(overviewSymbols.filter((symbol) => symbol.endsWith('USDT')).map(getTicker)).then((results) => {
       if (!active) return
       const values = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
       setMarketTickers(new Map(values.map((ticker) => [ticker.symbol, ticker])))
@@ -165,7 +165,7 @@ function Dashboard() {
 
       <section aria-labelledby="market-overview-title">
         <div className="mb-3 flex items-end justify-between gap-3">
-          <div><h2 className="text-sm font-semibold" id="market-overview-title">Market overview</h2><p className="mt-1 text-xs text-muted">Live Binance crypto · Demo forex</p></div>
+          <div><h2 className="text-sm font-semibold" id="market-overview-title">Market overview</h2><p className="mt-1 text-xs text-muted">Binance crypto · Live Forex when configured</p></div>
           <Button onClick={() => navigate('/markets')} size="sm" variant="ghost">All markets</Button>
         </div>
         <div className="grid gap-4 xl:grid-cols-2">

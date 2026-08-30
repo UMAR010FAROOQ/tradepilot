@@ -14,6 +14,7 @@ import { getHistoricalCandles, subscribeToTicker } from '../services/marketServi
 import { subscribeToPosition } from '../services/positionService.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { formatPrice, formatVolume } from '../utils/marketFormatters.js'
+import { getForexSessionStatus } from '../utils/forexSession.js'
 
 const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d']
 const TradingChart = lazy(() => import('../components/charts/TradingChart.jsx'))
@@ -30,7 +31,7 @@ function Trade() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [streamError, setStreamError] = useState('')
-  const [connectionStatus, setConnectionStatus] = useState(market.type === 'crypto' ? 'connecting' : 'demo')
+  const [connectionStatus, setConnectionStatus] = useState('connecting')
   const [position, setPosition] = useState(null)
   const [positionLoading, setPositionLoading] = useState(true)
   const [tradeNotice, setTradeNotice] = useState('')
@@ -42,7 +43,7 @@ function Trade() {
     let active = true
     getHistoricalCandles(symbol, interval)
       .then((items) => { if (active) { setCandles(items); setError('') } })
-      .catch(() => active && setError(market.type === 'crypto' ? 'Binance chart data could not be loaded.' : 'Demo chart data could not be loaded.'))
+      .catch(() => active && setError(market.type === 'crypto' ? 'Binance chart data could not be loaded.' : 'Forex chart data could not be loaded.'))
       .finally(() => active && setLoading(false))
     return () => { active = false }
   }, [interval, market.type, symbol])
@@ -53,7 +54,7 @@ function Trade() {
     () => setStreamError('Live price updates are temporarily unavailable.'),
     (status) => {
       setConnectionStatus(status)
-      if (status === 'live' || status === 'demo') setStreamError('')
+      if (status === 'live' || status === 'demo' || status === 'stale') setStreamError('')
     },
   ), [symbol])
 
@@ -71,13 +72,14 @@ function Trade() {
     ['24h low', formatPrice(ticker.low24h, market)],
     ['24h volume', formatVolume(ticker.volume24h)],
   ] : [], [market, ticker])
+  const forexSession = market.type === 'forex' ? getForexSessionStatus() : null
 
   const selectSymbol = (nextSymbol) => {
     setLoading(true)
     setTicker(null)
     setStreamError('')
     setPositionLoading(true)
-    setConnectionStatus(marketBySymbol.get(nextSymbol)?.type === 'crypto' ? 'connecting' : 'demo')
+    setConnectionStatus('connecting')
     navigate(`/trade?symbol=${nextSymbol}`, { replace: true })
   }
   const selectInterval = (nextInterval) => { setLoading(true); setIntervalValue(nextInterval) }
@@ -91,7 +93,7 @@ function Trade() {
       <Card padding="none">
         <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center">
           <div className="w-full lg:w-52"><Select aria-label="Select market" onChange={(event) => selectSymbol(event.target.value)} value={symbol}>{markets.map((item) => <option key={item.symbol} value={item.symbol}>{item.displaySymbol} · {item.category}</option>)}</Select></div>
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="text-xl font-semibold">{market.displaySymbol}</h1><MarketSourceBadge status={connectionStatus} type={market.type} /></div><p className="mt-1 text-xs text-muted">{market.name} · {market.type === 'crypto' ? '24/7 instrument' : 'Demo session'}</p></div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="text-xl font-semibold">{market.displaySymbol}</h1><MarketSourceBadge status={connectionStatus} type={market.type} />{forexSession && <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${forexSession.isOpen ? 'bg-positive/10 text-positive' : 'bg-negative/10 text-negative'}`}>{forexSession.displayStatus}</span>}</div><p className="mt-1 text-xs text-muted">{market.name} · {market.type === 'crypto' ? '24/7 instrument' : `${forexSession.status} session · ${forexSession.note}`}</p></div>
           <div><p className="financial-value text-2xl font-semibold">{formatPrice(ticker?.price, market)}</p>{ticker && <PriceChange amount={ticker.change} showAmount value={ticker.changePercent} />}</div>
           <div className="grid grid-cols-3 gap-5">{stats.map(([label, value]) => <div key={label}><p className="text-[10px] uppercase tracking-wider text-muted">{label}</p><p className="financial-value mt-1 text-xs font-semibold">{value}</p></div>)}</div>
         </div>
@@ -103,7 +105,7 @@ function Trade() {
             <div className="flex items-center gap-2"><ChartCandlestick className="size-4 text-accent" /><span className="text-xs font-semibold">Price chart</span></div>
             <div className="flex items-center gap-1">{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<IconButton aria-label="Chart settings placeholder" className="ml-1" icon={Settings} size="sm" title="Chart settings" /><IconButton aria-label="Maximize chart placeholder" icon={Maximize} size="sm" title="Maximize chart" /></div>
           </div>
-          {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={market.type === 'crypto' ? ticker?.price : undefined} symbol={symbol} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
+          {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={ticker?.price} symbol={symbol} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
         </Card>
 
         <Card padding="none"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">Simulated order</h2><p className="mt-1 text-xs text-muted">Market orders only · no leverage or short selling</p></div><OrderPanel market={market} onComplete={setTradeNotice} position={position} positionLoading={positionLoading} ticker={ticker} userId={currentUser.uid} wallet={wallet} /></Card>

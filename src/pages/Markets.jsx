@@ -25,6 +25,7 @@ function Markets() {
   const [error, setError] = useState('')
   const [pending, setPending] = useState('')
   const [cryptoStatus, setCryptoStatus] = useState('connecting')
+  const [forexStatus, setForexStatus] = useState('connecting')
   const { currentUser } = useAuth()
   const navigate = useNavigate()
 
@@ -32,13 +33,14 @@ function Markets() {
     let active = true
     getMarketSymbols().then(async (available) => {
       if (active) setMarkets(available)
-      const results = await Promise.allSettled(available.map((market) => getTicker(market.symbol)))
+      const initialMarkets = available.filter((market) => market.type === 'crypto')
+      const results = await Promise.allSettled(initialMarkets.map((market) => getTicker(market.symbol)))
       if (!active) return
       const values = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
       setTickers(new Map(values.map((ticker) => [ticker.symbol, ticker])))
-      if (results.some((result, index) => result.status === 'rejected' && available[index].type === 'crypto')) {
+      if (results.some((result) => result.status === 'rejected')) {
         setCryptoStatus('unavailable')
-        setError('Live crypto data is temporarily unavailable. Forex demo data remains available.')
+        setError('Live crypto data is temporarily unavailable.')
       }
       setLoading(false)
     }).catch(() => {
@@ -54,15 +56,19 @@ function Markets() {
   ), [currentUser.uid])
 
   useEffect(() => {
-    const cryptoMarkets = markets.filter((market) => market.type === 'crypto')
-    if (cryptoMarkets.length === 0) return undefined
-    const unsubscribe = cryptoMarkets.map((market) => subscribeToTicker(
+    if (markets.length === 0) return undefined
+    const unsubscribe = markets.map((market) => subscribeToTicker(
       market.symbol,
       (ticker) => setTickers((current) => new Map(current).set(ticker.symbol, ticker)),
-      () => setError('Live crypto updates are temporarily unavailable.'),
+      () => {
+        if (market.type === 'crypto') setError('Live crypto updates are temporarily unavailable.')
+        else setForexStatus('unavailable')
+      },
       (status) => {
-        setCryptoStatus(status)
-        if (status === 'live') setError((current) => current.startsWith('Live crypto') ? '' : current)
+        if (market.type === 'crypto') {
+          setCryptoStatus(status)
+          if (status === 'live') setError((current) => current.startsWith('Live crypto') ? '' : current)
+        } else setForexStatus(status)
       },
     ))
     return () => unsubscribe.forEach((stop) => stop())
@@ -86,7 +92,7 @@ function Markets() {
   return (
     <div className="space-y-6">
       <PageHeader
-        actions={<><MarketSourceBadge status={cryptoStatus} type="crypto" /><MarketSourceBadge type="forex" /></>}
+        actions={<><MarketSourceBadge status={cryptoStatus} type="crypto" /><MarketSourceBadge status={forexStatus} type="forex" /></>}
         description="Explore the crypto and forex universe before opening a chart."
         eyebrow="Market data"
         title="Markets"
@@ -99,12 +105,13 @@ function Markets() {
         </div>
         {loading ? <div className="grid gap-3 p-5" role="status">{[1, 2, 3, 4, 5].map((item) => <span className="h-14 animate-pulse rounded-lg bg-elevated" key={item} />)}</div> : visible.length === 0 ? <div className="grid min-h-56 place-items-center p-8 text-center"><div><Search className="mx-auto size-6 text-muted" /><h2 className="mt-3 text-sm font-semibold">No markets found</h2><p className="mt-1 text-xs text-muted">Try another symbol or category.</p></div></div> : (
           <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left">
-            <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">Market</th><th className="px-5 py-3">Price</th><th className="px-5 py-3">24h change</th><th className="px-5 py-3">24h high</th><th className="px-5 py-3">24h low</th><th className="px-5 py-3">Volume</th><th className="px-5 py-3 text-center">Watchlist</th></tr></thead>
+            <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">Market</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Price</th><th className="px-5 py-3">24h change</th><th className="px-5 py-3">24h high</th><th className="px-5 py-3">24h low</th><th className="px-5 py-3">Volume</th><th className="px-5 py-3 text-center">Watchlist</th></tr></thead>
             <tbody className="divide-y divide-border">{visible.map((market) => {
               const ticker = tickers.get(market.symbol)
               const openTrade = () => navigate(`/trade?symbol=${market.symbol}`)
               return <tr className="cursor-pointer transition hover:bg-elevated/50" key={market.symbol} onClick={openTrade} onKeyDown={(event) => { if (event.key === 'Enter') openTrade() }} tabIndex={0}>
                 <td className="px-5 py-4"><p className="text-sm font-semibold">{market.displaySymbol}</p><p className="text-xs text-muted">{market.name}</p></td>
+                <td className="px-5 py-4">{market.type === 'crypto' ? <span className="text-xs font-medium text-positive">Open</span> : <span className={`text-xs font-medium ${ticker?.marketStatus === 'Open' ? 'text-positive' : 'text-negative'}`}>{ticker?.marketStatus || 'Unavailable'}</span>}</td>
                 <td className="financial-value px-5 py-4 text-sm">{formatPrice(ticker?.price, market)}</td>
                 <td className="px-5 py-4">{ticker ? <PriceChange amount={ticker.change} showAmount value={ticker.changePercent} /> : <span className="text-xs text-negative">Unavailable</span>}</td>
                 <td className="financial-value px-5 py-4 text-sm text-muted">{formatPrice(ticker?.high24h, market)}</td>

@@ -15,7 +15,7 @@ export function formatPercent(value) {
 }
 
 export function formatVolume(value) {
-  if (!Number.isFinite(value)) return '—'
+  if (!Number.isFinite(value)) return 'N/A'
   const units = [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']]
   const unit = units.find(([threshold]) => Math.abs(value) >= threshold)
   return unit ? `${(value / unit[0]).toFixed(value >= unit[0] * 10 ? 1 : 2)}${unit[1]}` : value.toFixed(0)

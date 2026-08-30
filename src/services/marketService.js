@@ -1,4 +1,4 @@
-import { marketBySymbol } from '../data/markets.js'
+import { marketBySymbol, markets } from '../data/markets.js'
 import {
   BINANCE_MARKET_SOURCE,
   getBinanceHistoricalCandles,
@@ -7,12 +7,11 @@ import {
   subscribeToBinanceTicker,
 } from './binanceMarketService.js'
 import {
-  getMockHistoricalCandles,
-  getMockMarketSymbols,
-  getMockTicker,
-  MOCK_MARKET_SOURCE,
-  subscribeToMockTicker,
-} from './mockMarketService.js'
+  FOREX_MARKET_SOURCE,
+  getForexHistoricalCandles,
+  getForexTicker,
+  subscribeToForexTicker,
+} from './forexMarketService.js'
 
 const BULK_TICKER_TTL = 10000
 let bulkTickerPromise = null
@@ -36,12 +35,12 @@ async function getCachedCryptoTickers() {
   return bulkTickerPromise
 }
 
-export const marketSources = { crypto: BINANCE_MARKET_SOURCE, forex: MOCK_MARKET_SOURCE }
-export const getMarketSymbols = () => getMockMarketSymbols()
+export const marketSources = { crypto: BINANCE_MARKET_SOURCE, forex: FOREX_MARKET_SOURCE }
+export const getMarketSymbols = async () => markets
 
-export async function getTicker(symbol) {
+export async function getTicker(symbol, options) {
   const market = marketFor(symbol)
-  if (market.type === 'forex') return getMockTicker(symbol)
+  if (market.type === 'forex') return getForexTicker(symbol, options)
   const tickers = await getCachedCryptoTickers()
   return tickers.find((ticker) => ticker.symbol === symbol) || getBinanceTicker(symbol)
 }
@@ -49,11 +48,11 @@ export async function getTicker(symbol) {
 export function getHistoricalCandles(symbol, interval) {
   return marketFor(symbol).type === 'crypto'
     ? getBinanceHistoricalCandles(symbol, interval)
-    : getMockHistoricalCandles(symbol, interval)
+    : getForexHistoricalCandles(symbol, interval)
 }
 
 export function subscribeToTicker(symbol, callback, onError, onStatus) {
   return marketFor(symbol).type === 'crypto'
     ? subscribeToBinanceTicker(symbol, callback, onError, onStatus)
-    : subscribeToMockTicker(symbol, callback, onError, onStatus)
+    : subscribeToForexTicker(symbol, callback, onError, onStatus)
 }

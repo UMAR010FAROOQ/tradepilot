@@ -21,6 +21,10 @@ const firestoreErrorMessages = {
   'trading/minimum': 'Trade amount must be at least $1.',
   'trading/invalid-quantity': 'Enter a valid quantity greater than zero.',
   'trading/market-unavailable': 'Market price is currently unavailable.',
+  'forex/live-required': 'Live Forex data is required to place a simulated Forex order.',
+  'forex/market-closed': 'Forex market is currently closed.',
+  'forex/stale-price': 'The latest Forex price is stale. Please try again later.',
+  'forex/provider-unavailable': 'Live Forex data is temporarily unavailable.',
   aborted: 'Your account data changed. Please try again.',
 }
 

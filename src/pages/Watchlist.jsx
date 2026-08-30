@@ -22,6 +22,7 @@ function Watchlist() {
   const [pending, setPending] = useState('')
   const [error, setError] = useState('')
   const [cryptoStatus, setCryptoStatus] = useState('connecting')
+  const [forexStatus, setForexStatus] = useState('connecting')
   const { currentUser } = useAuth()
   const navigate = useNavigate()
 
@@ -35,11 +36,12 @@ function Watchlist() {
 
   useEffect(() => {
     let active = true
-    Promise.allSettled(supportedSymbols.map(getTicker)).then((results) => {
+    const cryptoSymbols = supportedSymbols.filter((symbol) => marketBySymbol.get(symbol)?.type === 'crypto')
+    Promise.allSettled(cryptoSymbols.map(getTicker)).then((results) => {
       if (!active) return
       const values = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
       setTickers(new Map(values.map((ticker) => [ticker.symbol, ticker])))
-      if (results.some((result, index) => result.status === 'rejected' && marketBySymbol.get(supportedSymbols[index])?.type === 'crypto')) {
+      if (results.some((result) => result.status === 'rejected')) {
         setCryptoStatus('unavailable')
         setError('Some live crypto watchlist values are unavailable.')
       }
@@ -52,11 +54,15 @@ function Watchlist() {
     const unsubscribe = supportedSymbols.map((symbol) => subscribeToTicker(
       symbol,
       (ticker) => setTickers((current) => new Map(current).set(ticker.symbol, ticker)),
-      () => { if (marketBySymbol.get(symbol)?.type === 'crypto') setError('Live crypto watchlist updates are temporarily unavailable.') },
+      () => {
+        if (marketBySymbol.get(symbol)?.type === 'crypto') setError('Live crypto watchlist updates are temporarily unavailable.')
+        else setForexStatus('unavailable')
+      },
       (status) => {
-        if (marketBySymbol.get(symbol)?.type !== 'crypto') return
-        setCryptoStatus(status)
-        if (status === 'live') setError((current) => current.startsWith('Live crypto') ? '' : current)
+        if (marketBySymbol.get(symbol)?.type === 'crypto') {
+          setCryptoStatus(status)
+          if (status === 'live') setError((current) => current.startsWith('Live crypto') ? '' : current)
+        } else setForexStatus(status)
       },
     ))
     return () => unsubscribe.forEach((stop) => stop())
@@ -76,20 +82,20 @@ function Watchlist() {
   return (
     <div className="space-y-6">
       <PageHeader
-        actions={<>{hasCrypto && <MarketSourceBadge status={cryptoStatus} type="crypto" />}{hasForex && <MarketSourceBadge type="forex" />}</>}
-        description="Your persistent Firestore watchlist with live crypto and demo forex data."
+        actions={<>{hasCrypto && <MarketSourceBadge status={cryptoStatus} type="crypto" />}{hasForex && <MarketSourceBadge status={forexStatus} type="forex" />}</>}
+        description="Your persistent Firestore watchlist with isolated Crypto and Forex market feeds."
         eyebrow="Activity"
         title="Watchlist"
       />
       {error && <div className="flex gap-2.5 rounded-lg border border-negative/25 bg-negative/10 p-3 text-sm text-negative" role="alert"><CircleAlert className="mt-0.5 size-4 shrink-0" /><p>{error}</p></div>}
       <Card padding="none">
         {loading ? <div className="grid gap-3 p-5" role="status">{[1, 2, 3].map((item) => <span className="h-14 animate-pulse rounded-lg bg-elevated" key={item} />)}</div> : supportedSymbols.length === 0 ? <div className="grid min-h-56 place-items-center p-8 text-center"><div><span className="mx-auto grid size-11 place-items-center rounded-xl bg-elevated text-muted"><Star className="size-5" /></span><h2 className="mt-4 text-sm font-semibold">Your watchlist is empty</h2><p className="mt-1 text-xs text-muted">Star instruments on the Markets page to add them here.</p><Button className="mt-4" onClick={() => navigate('/markets')} size="sm" variant="secondary">Browse markets</Button></div></div> : (
-          <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left">
-            <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">Symbol</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Price</th><th className="px-5 py-3">24h change</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
+          <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left">
+            <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">Symbol</th><th className="px-5 py-3">Source</th><th className="px-5 py-3">Market</th><th className="px-5 py-3">Price</th><th className="px-5 py-3">24h change</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
             <tbody className="divide-y divide-border">{supportedSymbols.map((symbol) => {
               const market = marketBySymbol.get(symbol)
               const ticker = tickers.get(symbol)
-              return <tr key={symbol}><td className="px-5 py-4"><p className="text-sm font-semibold">{market.displaySymbol}</p><p className="text-xs text-muted">{market.name}</p></td><td className="px-5 py-4"><Badge variant="neutral">{market.type}</Badge></td><td className="financial-value px-5 py-4 text-sm">{formatPrice(ticker?.price, market)}</td><td className="px-5 py-4">{ticker ? <PriceChange value={ticker.changePercent} /> : <span className="text-xs text-negative">Unavailable</span>}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><Button onClick={() => navigate(`/trade?symbol=${symbol}`)} size="sm">Open trade</Button><IconButton aria-label={`Remove ${market.displaySymbol} from watchlist`} icon={Trash2} loading={pending === symbol} onClick={() => remove(symbol)} size="sm" title="Remove from watchlist" variant="danger" /></div></td></tr>
+              return <tr key={symbol}><td className="px-5 py-4"><p className="text-sm font-semibold">{market.displaySymbol}</p><p className="text-xs text-muted">{market.name}</p></td><td className="px-5 py-4"><MarketSourceBadge status={ticker?.connectionStatus || (market.type === 'crypto' ? cryptoStatus : forexStatus)} type={market.type} /></td><td className="px-5 py-4"><Badge variant={market.type === 'crypto' || ticker?.marketStatus === 'Open' ? 'positive' : 'negative'}>{market.type === 'crypto' ? 'Open' : ticker?.marketStatus || 'Unavailable'}</Badge></td><td className="financial-value px-5 py-4 text-sm">{formatPrice(ticker?.price, market)}</td><td className="px-5 py-4">{ticker && Number.isFinite(ticker.changePercent) ? <PriceChange value={ticker.changePercent} /> : <span className="text-xs text-muted">N/A</span>}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><Button onClick={() => navigate(`/trade?symbol=${symbol}`)} size="sm">Open trade</Button><IconButton aria-label={`Remove ${market.displaySymbol} from watchlist`} icon={Trash2} loading={pending === symbol} onClick={() => remove(symbol)} size="sm" title="Remove from watchlist" variant="danger" /></div></td></tr>
             })}</tbody>
           </table></div>
         )}

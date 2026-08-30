@@ -26,6 +26,12 @@ function OrderPanel({ userId, market, ticker, wallet, position, positionLoading,
   const fee = grossAmount * TRADING_FEE_RATE
   const total = side === 'BUY' ? grossAmount + fee : grossAmount - fee
   const pnl = useMemo(() => calculatePositionPnl(position, price), [position, price])
+  const forexBlocked = market.type === 'forex' && (
+    ticker?.marketStatus !== 'Open' || ticker?.connectionStatus !== 'live' || ticker?.isStale
+  )
+  const forexMessage = market.type === 'forex' && ticker?.marketStatus && ticker.marketStatus !== 'Open'
+    ? 'Forex market is currently closed.'
+    : 'Live Forex pricing is unavailable or stale.'
 
   const chooseFraction = (fraction) => {
     if (!Number.isFinite(price) || price <= 0) return
@@ -39,17 +45,18 @@ function OrderPanel({ userId, market, ticker, wallet, position, positionLoading,
   const prepareOrder = async (event) => {
     event.preventDefault()
     setError('')
+    if (forexBlocked) return setError(forexMessage)
     if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) return setError('Enter a valid quantity greater than zero.')
     if (grossAmount < MIN_TRADE_USD) return setError(`Trade amount must be at least $${MIN_TRADE_USD}.`)
     if (side === 'SELL' && (!position || position.status !== 'open' || position.quantity <= 0)) return setError('No open position to sell.')
     if (side === 'SELL' && numericQuantity > position.quantity) return setError('Sell quantity exceeds your position.')
     try {
-      const freshTicker = await getTicker(market.symbol)
+      const freshTicker = await getTicker(market.symbol, { forExecution: market.type === 'forex' })
       const freshGross = numericQuantity * freshTicker.price
       const freshFee = freshGross * TRADING_FEE_RATE
       setConfirmation({ price: freshTicker.price, grossAmount: freshGross, fee: freshFee, total: side === 'BUY' ? freshGross + freshFee : freshGross - freshFee })
-    } catch {
-      setError('Market price is currently unavailable.')
+    } catch (requestError) {
+      setError(getFirestoreErrorMessage(requestError))
     }
   }
 
@@ -57,7 +64,7 @@ function OrderPanel({ userId, market, ticker, wallet, position, positionLoading,
     setProcessing(true)
     setError('')
     try {
-      const freshTicker = await getTicker(market.symbol)
+      const freshTicker = await getTicker(market.symbol, { forExecution: market.type === 'forex' })
       const execute = side === 'BUY' ? executeBuy : executeSell
       await execute({ userId, symbol: market.symbol, quantity: numericQuantity, executionPrice: freshTicker.price })
       setQuantity('')
@@ -80,8 +87,9 @@ function OrderPanel({ userId, market, ticker, wallet, position, positionLoading,
         <Input inputMode="decimal" label="Quantity" min="0" onChange={(event) => { setQuantity(event.target.value); setError('') }} placeholder="0.00000000" step="any" type="number" value={quantity} />
         <div className="grid grid-cols-4 gap-2">{helpers.map((fraction) => <button className="h-8 rounded-md border border-border bg-elevated text-[11px] font-semibold text-muted transition hover:border-accent/50 hover:text-foreground" key={fraction} onClick={() => chooseFraction(fraction)} type="button">{fraction === 1 ? 'Max' : `${fraction * 100}%`}</button>)}</div>
         {error && <div className="flex gap-2 rounded-lg border border-negative/25 bg-negative/10 p-3 text-xs text-negative" role="alert"><CircleAlert className="size-4 shrink-0" />{error}</div>}
+        {forexBlocked && !error && <div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning" role="status">{forexMessage}</div>}
         <dl className="space-y-2 border-t border-border pt-4 text-xs"><div className="flex justify-between"><dt className="text-muted">Estimated value</dt><dd className="financial-value">{formatCurrency(grossAmount)}</dd></div><div className="flex justify-between"><dt className="text-muted">Fee (0.10%)</dt><dd className="financial-value">{formatCurrency(fee)}</dd></div><div className="flex justify-between font-semibold"><dt>{side === 'BUY' ? 'Total cost' : 'Estimated proceeds'}</dt><dd className="financial-value">{formatCurrency(total)}</dd></div></dl>
-        <Button disabled={!wallet || !ticker || processing || (side === 'SELL' && (!position || position.quantity <= 0))} fullWidth size="lg" type="submit" variant={side === 'BUY' ? 'success' : 'danger'}>{side === 'BUY' ? 'Review Buy' : 'Review Sell'}</Button>
+        <Button disabled={!wallet || !ticker || processing || forexBlocked || (side === 'SELL' && (!position || position.quantity <= 0))} fullWidth size="lg" type="submit" variant={side === 'BUY' ? 'success' : 'danger'}>{side === 'BUY' ? 'Review Buy' : 'Review Sell'}</Button>
         <p className="text-center text-[10px] leading-4 text-muted">Simulated market order. No real exchange order is placed.</p>
       </form>
       <div className="border-t border-border p-5"><h3 className="text-xs font-semibold">Current position</h3>{positionLoading ? <span className="mt-3 block h-16 animate-pulse rounded-lg bg-elevated" /> : position?.status === 'open' ? <div className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><p className="text-muted">Quantity</p><p className="financial-value mt-1">{position.quantity}</p></div><div><p className="text-muted">Average entry</p><p className="financial-value mt-1">{formatPrice(position.averageEntryPrice, market)}</p></div><div><p className="text-muted">Market value</p><p className="financial-value mt-1">{formatCurrency(pnl.marketValue)}</p></div><div><p className="text-muted">Unrealized P/L</p><PriceChange amount={pnl.unrealizedPnl} className="mt-1" showAmount value={pnl.unrealizedPnlPercent} /></div></div> : <p className="mt-2 text-xs text-muted">No open {market.displaySymbol} position.</p>}</div>
