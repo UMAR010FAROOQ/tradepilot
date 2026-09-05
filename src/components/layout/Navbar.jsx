@@ -3,7 +3,7 @@ import { Bell, Check, CheckCheck, ChevronDown, LogOut, Menu, UserRound } from 'l
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import Button from '../common/Button.jsx'
-import SearchInput from '../common/SearchInput.jsx'
+import IconButton from '../common/IconButton.jsx'
 import { markAllNotificationsRead, markNotificationRead, subscribeToNotifications } from '../../services/notificationService.js'
 
 const pageTitles = {
@@ -44,7 +44,6 @@ function getInitials(name, email) {
 function Navbar({ onMenuClick }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [logoutError, setLogoutError] = useState('')
-  const [globalSearch, setGlobalSearch] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [notificationError, setNotificationError] = useState('')
@@ -76,14 +75,15 @@ function Navbar({ onMenuClick }) {
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex h-18 items-center border-b border-border bg-canvas/90 px-4 backdrop-blur-xl md:left-18 md:px-5 xl:left-60 xl:px-7">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <Button
+        <IconButton
           aria-label="Open navigation"
-          className="size-9 px-0 md:hidden"
+          className="md:hidden"
+          icon={Menu}
+          iconSize="lg"
           onClick={onMenuClick}
-          variant="ghost"
-        >
-          <Menu aria-hidden="true" className="size-5" />
-        </Button>
+          size="lg"
+          variant="prominent"
+        />
         <div className="min-w-0">
           <p className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-muted sm:block">
             Workspace
@@ -91,8 +91,6 @@ function Navbar({ onMenuClick }) {
           <p className="truncate text-sm font-semibold text-foreground sm:text-base">{pageTitle}</p>
         </div>
       </div>
-
-      <form className="mx-5 hidden w-full max-w-md lg:block" onSubmit={(event) => { event.preventDefault(); const query = globalSearch.trim(); navigate(query ? `/markets?search=${encodeURIComponent(query)}` : '/markets') }} role="search"><SearchInput aria-label="Search markets" id="global-market-search" inputClassName="h-9 bg-surface" onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search markets" value={globalSearch} /></form>
 
       <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
         <div className="hidden items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 sm:flex">
@@ -102,7 +100,7 @@ function Navbar({ onMenuClick }) {
           </span>
           <span className="text-xs font-medium text-muted">Market data live</span>
         </div>
-        <div className="relative"><Button aria-expanded={notificationsOpen} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} className={`relative size-10 border px-0 shadow-[0_0_20px_rgb(59_130_246_/_0.12)] ${notificationsOpen || unreadCount ? 'border-accent/60 bg-accent/15 text-accent' : 'border-border bg-elevated text-foreground hover:border-accent/40 hover:bg-accent/10 hover:text-accent'}`} onClick={() => setNotificationsOpen((value) => !value)} variant="ghost"><Bell aria-hidden="true" className="size-5" />{unreadCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-canvas bg-accent px-1 text-[10px] font-bold text-white shadow-md">{unreadCount > 9 ? '9+' : unreadCount}</span>}</Button>
+        <div className="relative"><IconButton aria-expanded={notificationsOpen} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} icon={Bell} iconSize="lg" onClick={() => setNotificationsOpen((value) => !value)} size="lg" variant={notificationsOpen || unreadCount ? 'prominent-active' : 'prominent'}>{unreadCount > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-canvas bg-negative px-1 text-[10px] font-bold text-white shadow-md">{unreadCount > 9 ? '9+' : unreadCount}</span>}</IconButton>
           {notificationsOpen && <section aria-label="Recent notifications" className="absolute right-0 top-12 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-elevated shadow-panel"><header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3"><div><h2 className="text-sm font-semibold">Notifications</h2><p className="mt-0.5 text-[11px] text-muted">{unreadCount} unread</p></div><Button disabled={!unreadCount} onClick={async () => { try { await markAllNotificationsRead(notifications); setNotificationError('') } catch { setNotificationError('Unable to update notifications.') } }} size="sm" variant="ghost"><CheckCheck className="size-3.5" />Mark all read</Button></header>{notificationError && <p className="border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning" role="status">{notificationError}</p>}<div className="max-h-96 overflow-y-auto">{notifications.length === 0 ? <p className="px-4 py-8 text-center text-sm text-muted">No notifications yet.</p> : notifications.slice(0, 8).map((item) => <article className={`border-b border-border px-4 py-3 last:border-0 ${item.read ? '' : 'bg-accent/5'}`} key={item.id}><div className="flex items-start gap-3"><span className={`mt-1 size-2 shrink-0 rounded-full ${item.read ? 'bg-muted/40' : 'bg-accent'}`} /><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-5 text-muted">{item.message}</p><p className="mt-2 text-[10px] text-muted">{item.createdAt?.toDate?.().toLocaleString() || 'Just now'}</p></div>{!item.read && <button aria-label={`Mark ${item.title} as read`} className="grid size-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface hover:text-foreground" onClick={async () => { try { await markNotificationRead(item.id); setNotificationError('') } catch { setNotificationError('Unable to update this notification.') } }} type="button"><Check className="size-4" /></button>}</div></article>)}</div></section>}
         </div>
         <div className="relative">

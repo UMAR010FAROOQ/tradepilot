@@ -33,6 +33,35 @@ export const getTransactions = () => orderedCollection('transactions')
 export const getTrades = () => orderedCollection('trades')
 export async function getPositions() { return records(await getDocs(collection(db, 'positions'))) }
 
+export async function updateUserRole(userId, nextRole) {
+  if (!['user', 'admin'].includes(nextRole)) {
+    throw createServiceError('admin/invalid-role', 'Choose either the User or Admin role.')
+  }
+
+  const admin = auth.currentUser
+  if (!admin) throw createServiceError('admin/unauthorized', 'Sign in as an administrator.')
+  if (admin.uid === userId) {
+    throw createServiceError('admin/self-role-change', 'You cannot change your own role.')
+  }
+
+  return runTransaction(db, async (transaction) => {
+    const adminRef = doc(db, 'users', admin.uid)
+    const userRef = doc(db, 'users', userId)
+    const adminSnapshot = await transaction.get(adminRef)
+    const userSnapshot = await transaction.get(userRef)
+
+    requireAdmin(adminSnapshot)
+    if (!userSnapshot.exists()) {
+      throw createServiceError('admin/user-missing', 'The selected user no longer exists.')
+    }
+
+    transaction.update(userRef, {
+      role: nextRole,
+      updatedAt: serverTimestamp(),
+    })
+  })
+}
+
 export async function getPendingDeposits() {
   return (await getDeposits()).filter((item) => item.status === 'pending')
 }
@@ -42,7 +71,7 @@ export async function getPendingWithdrawals() {
 }
 
 function requireAdmin(adminSnapshot) {
-  if (!adminSnapshot.exists() || adminSnapshot.data().role !== 'admin') {
+  if (!adminSnapshot.exists() || adminSnapshot.data().role !== 'admin' || adminSnapshot.data().accountStatus !== 'active') {
     throw createServiceError('admin/unauthorized', 'Administrator access is required.')
   }
 }

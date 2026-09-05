@@ -1,17 +1,22 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Activity, ChartCandlestick, Clock, Maximize, Minimize } from 'lucide-react'
+import { Activity, ChartCandlestick, Maximize, Minimize, RotateCcw, ShieldCheck } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Card from '../components/common/Card.jsx'
 import IconButton from '../components/common/IconButton.jsx'
 import Select from '../components/common/Select.jsx'
 import MarketSourceBadge from '../components/trading/MarketSourceBadge.jsx'
 import OrderPanel from '../components/trading/OrderPanel.jsx'
+import OpenPositionPanel from '../components/trading/OpenPositionPanel.jsx'
+import PendingOrders from '../components/trading/PendingOrders.jsx'
 import PriceChange from '../components/trading/PriceChange.jsx'
+import RecentTrades from '../components/trading/RecentTrades.jsx'
 import { marketBySymbol, markets } from '../data/markets.js'
 import useAuth from '../hooks/useAuth.js'
 import useWallet from '../hooks/useWallet.js'
 import { getHistoricalCandles, subscribeToTicker } from '../services/marketService.js'
+import { subscribeToPendingOrders } from '../services/orderService.js'
 import { subscribeToPosition } from '../services/positionService.js'
+import { subscribeToTrades } from '../services/tradeService.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { formatPrice, formatVolume } from '../utils/marketFormatters.js'
 import { getForexSessionStatus } from '../utils/forexSession.js'
@@ -36,6 +41,9 @@ function Trade() {
   const [positionLoading, setPositionLoading] = useState(true)
   const [tradeNotice, setTradeNotice] = useState('')
   const [chartExpanded, setChartExpanded] = useState(false)
+  const [resetSignal, setResetSignal] = useState(0)
+  const [pendingOrders, setPendingOrders] = useState([])
+  const [trades, setTrades] = useState([])
   const { currentUser } = useAuth()
   const { wallet } = useWallet()
   const navigate = useNavigate()
@@ -68,12 +76,27 @@ function Trade() {
     )
   }, [currentUser.uid, symbol])
 
+  useEffect(() => subscribeToPendingOrders(currentUser.uid, symbol, setPendingOrders, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid, symbol])
+  useEffect(() => subscribeToTrades(currentUser.uid, setTrades, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid])
+
   const stats = useMemo(() => ticker ? [
     ['24h high', formatPrice(ticker.high24h, market)],
     ['24h low', formatPrice(ticker.low24h, market)],
     ['24h volume', formatVolume(ticker.volume24h)],
   ] : [], [market, ticker])
   const forexSession = market.type === 'forex' ? getForexSessionStatus() : null
+  const marketOpen = market.type === 'crypto' || Boolean(forexSession?.isOpen && ticker?.marketStatus === 'Open' && ticker?.connectionStatus === 'live' && !ticker?.isStale)
+  const selectedTrades = useMemo(() => trades.filter((trade) => trade.symbol === symbol).slice(0, 5), [symbol, trades])
+  const chartLevels = useMemo(() => {
+    const levels = []
+    if (position?.status === 'open') {
+      levels.push({ label: 'Entry', price: position.averageEntryPrice, color: '#8b98a8', style: 2 })
+      if (position.stopLoss) levels.push({ label: 'SL', price: position.stopLoss, color: '#ea3943', style: 3 })
+      if (position.takeProfit) levels.push({ label: 'TP', price: position.takeProfit, color: '#16c784', style: 3 })
+    }
+    pendingOrders.forEach((order) => levels.push({ label: 'Limit', price: order.limitPrice, color: '#f59e0b', style: 1 }))
+    return levels
+  }, [pendingOrders, position])
 
   useEffect(() => {
     if (!chartExpanded) return undefined
@@ -107,19 +130,21 @@ function Trade() {
         </div>
       </Card>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card className={chartExpanded ? 'fixed inset-3 z-50 min-w-0 overflow-auto bg-surface sm:inset-6' : 'min-w-0'} padding="none">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
             <div className="flex items-center gap-2"><ChartCandlestick className="size-4 text-accent" /><span className="text-xs font-semibold">Price chart</span></div>
-            <div className="flex items-center gap-1">{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<IconButton aria-label={chartExpanded ? 'Restore chart' : 'Expand chart'} className="ml-1" icon={chartExpanded ? Minimize : Maximize} onClick={() => setChartExpanded((value) => !value)} size="sm" title={chartExpanded ? 'Restore chart' : 'Expand chart'} /></div>
+            <div className="flex items-center gap-1">{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<IconButton aria-label="Reset chart view" className="ml-1" icon={RotateCcw} onClick={() => setResetSignal((value) => value + 1)} size="sm" title="Reset chart view" /><IconButton aria-label={chartExpanded ? 'Restore chart' : 'Expand chart'} icon={chartExpanded ? Minimize : Maximize} onClick={() => setChartExpanded((value) => !value)} size="sm" title={chartExpanded ? 'Restore chart' : 'Expand chart'} /></div>
           </div>
-          {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={ticker?.price} symbol={symbol} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
+          {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={ticker?.price} priceLevels={chartLevels} resetSignal={resetSignal} symbol={symbol} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
         </Card>
 
-        <Card padding="none"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">Simulated order</h2><p className="mt-1 text-xs text-muted">Market orders only · no leverage or short selling</p></div><OrderPanel market={market} onComplete={setTradeNotice} position={position} positionLoading={positionLoading} ticker={ticker} userId={currentUser.uid} wallet={wallet} /></Card>
+        <Card padding="none"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">Simulated order</h2><p className="mt-1 text-xs text-muted">Long-only · no leverage, margin, or short selling</p></div><OrderPanel market={market} marketOpen={marketOpen} onComplete={setTradeNotice} ticker={ticker} userId={currentUser.uid} wallet={wallet} /></Card>
       </div>
-
-      <Card><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-lg bg-elevated text-muted"><Clock className="size-4" /></span><div><h2 className="text-sm font-semibold">Simulated execution</h2><p className="mt-1 text-xs text-muted">Prices originate from frontend market data and are not independently verified by Firestore.</p></div></div></Card>
+      {!positionLoading && <OpenPositionPanel market={market} marketOpen={marketOpen} onComplete={setTradeNotice} position={position} ticker={ticker} userId={currentUser.uid} />}
+      <PendingOrders market={market} onComplete={setTradeNotice} orders={pendingOrders} userId={currentUser.uid} />
+      <RecentTrades market={market} trades={selectedTrades} />
+      <Card><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-lg bg-elevated text-muted"><ShieldCheck className="size-4" /></span><div><h2 className="text-sm font-semibold">Client-side simulated execution</h2><p className="mt-1 text-xs leading-5 text-muted">Fresh provider quotes are requested before fills and closes. Pending orders and stop-loss/take-profit monitoring work only while TradePilot is open and are not exchange-grade protection.</p></div></div></Card>
     </div>
   )
 }

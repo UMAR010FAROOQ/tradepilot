@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar.jsx'
 import Sidebar from '../components/layout/Sidebar.jsx'
+import TradingAutomationMonitor from '../components/trading/TradingAutomationMonitor.jsx'
 
 function DashboardLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   return (
     <div className="min-h-dvh bg-canvas text-foreground">
+      <TradingAutomationMonitor />
       <Sidebar className="fixed inset-y-0 left-0 z-40 hidden md:flex" />
       <Navbar onMenuClick={() => setIsMobileMenuOpen(true)} />
 

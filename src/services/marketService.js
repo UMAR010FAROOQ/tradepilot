@@ -41,6 +41,7 @@ export const getMarketSymbols = async () => markets
 export async function getTicker(symbol, options) {
   const market = marketFor(symbol)
   if (market.type === 'forex') return getForexTicker(symbol, options)
+  if (options?.forExecution) return getBinanceTicker(symbol)
   const tickers = await getCachedCryptoTickers()
   return tickers.find((ticker) => ticker.symbol === symbol) || getBinanceTicker(symbol)
 }

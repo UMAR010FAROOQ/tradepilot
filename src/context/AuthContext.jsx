@@ -8,6 +8,17 @@ import { initializeUserAccount } from '../services/accountService.js'
 const AuthContext = createContext(undefined)
 const profileCache = new Map()
 
+async function sendVerificationAndSignOut(user) {
+  let verificationError = null
+  try {
+    await authService.sendVerificationEmail(user)
+  } catch (error) {
+    verificationError = error
+  }
+  await authService.logout()
+  return { verificationSent: !verificationError, verificationError }
+}
+
 function createProfileFallback(user) {
   return {
     uid: user.uid,
@@ -23,6 +34,7 @@ function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [verificationRevision, setVerificationRevision] = useState(0)
 
   useEffect(() => {
     let isActive = true
@@ -49,6 +61,11 @@ function AuthProvider({ children }) {
           profileCache.set(user.uid, profile)
           setUserProfile(profile)
           setLoading(false)
+          if (snapshot.exists()) {
+            initializeUserAccount(user).catch(() => {
+              // WalletContext exposes a recoverable missing-wallet error if setup remains incomplete.
+            })
+          }
         },
         () => {
           if (!isActive) return
@@ -57,9 +74,6 @@ function AuthProvider({ children }) {
         },
       )
 
-      initializeUserAccount(user).catch(() => {
-        // WalletContext exposes a recoverable missing-wallet error if setup remains incomplete.
-      })
     })
 
     return () => {
@@ -74,6 +88,7 @@ function AuthProvider({ children }) {
       currentUser,
       userProfile,
       loading,
+      verificationRevision,
       signup: async (email, password, fullName) => {
         const credential = await authService.signup(email, password)
         setCurrentUser(credential.user)
@@ -89,7 +104,8 @@ function AuthProvider({ children }) {
           profileCache.set(credential.user.uid, resolvedProfile)
           setUserProfile(resolvedProfile)
           await initializeUserAccount(credential.user)
-          return credential
+          const verification = await sendVerificationAndSignOut(credential.user)
+          return { credential, ...verification }
         } catch (error) {
           const setupError = new Error('The authentication account exists, but setup is incomplete.')
           setupError.code = 'account/initialization-failed'
@@ -107,6 +123,27 @@ function AuthProvider({ children }) {
         await authService.logout()
       },
       resetPassword: authService.resetPassword,
+      completeSignupVerification: async () => {
+        if (!currentUser) {
+          const error = new Error('A signed-in account is required to send verification.')
+          error.code = 'auth/requires-authentication'
+          throw error
+        }
+        return sendVerificationAndSignOut(currentUser)
+      },
+      resendVerification: async (email, password) => {
+        if (currentUser) {
+          if (currentUser.emailVerified) return { alreadyVerified: true }
+          await authService.sendVerificationEmail(currentUser)
+          return { alreadyVerified: false }
+        }
+        return authService.resendVerificationWithCredentials(email, password)
+      },
+      refreshEmailVerification: async () => {
+        const verified = await authService.refreshEmailVerification(currentUser)
+        setVerificationRevision((revision) => revision + 1)
+        return verified
+      },
       updateProfileName: async (fullName) => {
         const cleanName = await authService.updateProfileName(currentUser.uid, fullName)
         const nextProfile = { ...userProfile, fullName: cleanName }
@@ -128,7 +165,7 @@ function AuthProvider({ children }) {
         return profile
       },
     }),
-    [currentUser, loading, userProfile],
+    [currentUser, loading, userProfile, verificationRevision],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

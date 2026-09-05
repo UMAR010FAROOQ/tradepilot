@@ -6,6 +6,7 @@ import Input from '../components/common/Input.jsx'
 import useAuth from '../hooks/useAuth.js'
 import { getFirebaseErrorMessage } from '../utils/firebaseErrors.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
+import { needsEmailVerification } from '../utils/emailVerification.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -34,14 +35,14 @@ function Signup() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [needsRecovery, setNeedsRecovery] = useState(false)
-  const { currentUser, loading, signup, initializeAccount } = useAuth()
+  const { currentUser, loading, signup, initializeAccount, completeSignupVerification } = useAuth()
   const navigate = useNavigate()
 
   if (loading) {
     return <p className="py-10 text-center text-sm text-muted">Checking your session…</p>
   }
 
-  if (currentUser && !error && !isSubmitting) return <Navigate replace to="/dashboard" />
+  if (currentUser && !error && !isSubmitting) return <Navigate replace to={needsEmailVerification(currentUser) ? '/verify-email' : '/dashboard'} />
 
   const updateField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -59,8 +60,8 @@ function Signup() {
     setIsSubmitting(true)
 
     try {
-      await signup(form.email.trim(), form.password, form.fullName)
-      navigate('/dashboard', { replace: true })
+      const result = await signup(form.email.trim(), form.password, form.fullName)
+      navigate('/verify-email', { replace: true, state: { email: form.email.trim(), verificationSent: result.verificationSent, verificationErrorCode: result.verificationError?.code || '' } })
     } catch (firebaseError) {
       setNeedsRecovery(firebaseError?.code === 'account/initialization-failed')
       setError(
@@ -79,7 +80,8 @@ function Signup() {
 
     try {
       await initializeAccount(form.fullName)
-      navigate('/dashboard', { replace: true })
+      const result = await completeSignupVerification()
+      navigate('/verify-email', { replace: true, state: { email: form.email.trim(), verificationSent: result.verificationSent, verificationErrorCode: result.verificationError?.code || '' } })
     } catch (setupError) {
       setError(getFirestoreErrorMessage(setupError))
     } finally {

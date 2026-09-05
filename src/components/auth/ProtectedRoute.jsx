@@ -2,6 +2,7 @@ import { ShieldCheck } from 'lucide-react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import AccountRestricted from './AccountRestricted.jsx'
+import { needsEmailVerification } from '../../utils/emailVerification.js'
 
 function AuthLoadingScreen() {
   return (
@@ -25,6 +26,9 @@ function ProtectedRoute() {
 
   if (!currentUser) {
     return <Navigate replace state={{ from: location }} to="/login" />
+  }
+  if (needsEmailVerification(currentUser)) {
+    return <Navigate replace state={{ email: currentUser.email || '', from: location }} to="/verify-email" />
   }
   if (userProfile?.accountStatus && userProfile.accountStatus !== 'active') return <AccountRestricted status={userProfile.accountStatus} />
 

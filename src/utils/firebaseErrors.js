@@ -10,6 +10,8 @@ const firebaseErrorMessages = {
   'auth/operation-not-allowed': 'Email and password sign-in is not enabled yet.',
   'auth/wrong-password': 'The current password is incorrect.',
   'auth/requires-recent-login': 'Please sign in again before changing your password.',
+  'auth/requires-authentication': 'Sign in before requesting another verification email.',
+  'auth/quota-exceeded': 'Verification email limits were reached. Please try again later.',
 }
 
 export function getFirebaseErrorMessage(error) {

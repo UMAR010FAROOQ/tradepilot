@@ -15,8 +15,14 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountStatus == 'active';
     }
 
-    function isAdmin() {
+    function hasVerifiedEmail() {
       return signedIn() &&
+        (request.auth.token.firebase.sign_in_provider != 'password' ||
+         request.auth.token.email_verified == true);
+    }
+
+    function isAdmin() {
+      return hasVerifiedEmail() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountStatus == 'active';
     }
@@ -24,6 +30,15 @@ service cloud.firestore {
     function hasExactFields(requiredFields) {
       return request.resource.data.keys().hasAll(requiredFields) &&
         request.resource.data.keys().hasOnly(requiredFields);
+    }
+
+    function validAdminRoleUpdate(userId) {
+      return isAdmin() &&
+        request.auth.uid != userId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['role', 'updatedAt']) &&
+        request.resource.data.role in ['user', 'admin'] &&
+        request.resource.data.updatedAt == request.time;
     }
 
     function validPakistaniPaymentMethod(data) {
@@ -274,6 +289,22 @@ service cloud.firestore {
       return actual >= expected - 0.000001 && actual <= expected + 0.000001;
     }
 
+    function validTradingSymbol(symbol) {
+      return symbol in [
+        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+        'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'LINKUSDT', 'LTCUSDT',
+        'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD',
+        'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP', 'XAUUSD'
+      ];
+    }
+
+    function validProtection(data) {
+      return (data.stopLoss == null ||
+          (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss < data.averageEntryPrice)) &&
+        (data.takeProfit == null ||
+          (data.takeProfit is number && data.takeProfit > data.averageEntryPrice));
+    }
+
     function validTradeShape(tradeId, tradeData) {
       let positionId = tradeData.userId + '_' + tradeData.symbol;
       let positionBefore = get(
@@ -287,7 +318,7 @@ service cloud.firestore {
         tradeData.keys().hasOnly([
           'userId', 'symbol', 'marketType', 'side', 'quantity',
           'executionPrice', 'grossAmount', 'fee', 'netAmount',
-          'realizedPnl', 'status', 'createdAt'
+          'realizedPnl', 'status', 'createdAt', 'orderId'
         ]) &&
         tradeData.userId == request.auth.uid &&
         tradeData.symbol is string &&
@@ -323,6 +354,10 @@ service cloud.firestore {
         ) &&
         tradeData.status == 'filled' &&
         tradeData.createdAt == request.time &&
+        (!tradeData.keys().hasAny(['orderId']) ||
+          (tradeData.side == 'BUY' &&
+           getAfter(/databases/$(database)/documents/orders/$(tradeData.orderId)).data.status == 'filled' &&
+           getAfter(/databases/$(database)/documents/orders/$(tradeData.orderId)).data.fillTradeId == tradeId)) &&
         getAfter(/databases/$(database)/documents/wallets/$(tradeData.userId)).data.lastTradeId == tradeId &&
         getAfter(/databases/$(database)/documents/positions/$(positionId)).data.lastTradeId == tradeId;
     }
@@ -356,7 +391,7 @@ service cloud.firestore {
         hasExactFields([
           'userId', 'symbol', 'marketType', 'quantity', 'averageEntryPrice',
           'investedAmount', 'realizedPnl', 'status', 'createdAt',
-          'updatedAt', 'lastTradeId'
+          'updatedAt', 'lastTradeId', 'stopLoss', 'takeProfit'
         ]) &&
         positionId == request.auth.uid + '_' + request.resource.data.symbol &&
         request.resource.data.userId == request.auth.uid &&
@@ -364,6 +399,7 @@ service cloud.firestore {
         request.resource.data.quantity > 0 &&
         request.resource.data.realizedPnl == 0 &&
         request.resource.data.status == 'open' &&
+        validProtection(request.resource.data) &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time &&
         tradeAfter.side == 'BUY' &&
@@ -382,11 +418,12 @@ service cloud.firestore {
       return !exists(tradePath) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'quantity', 'averageEntryPrice', 'investedAmount', 'realizedPnl',
-          'status', 'updatedAt', 'lastTradeId'
+          'status', 'updatedAt', 'lastTradeId', 'stopLoss', 'takeProfit'
         ]) &&
         request.resource.data.updatedAt == request.time &&
         request.resource.data.quantity >= 0 &&
         request.resource.data.investedAmount >= 0 &&
+        validProtection(request.resource.data) &&
         tradeAfter.userId == resource.data.userId &&
         tradeAfter.symbol == resource.data.symbol &&
         tradeAfter.marketType == resource.data.marketType &&
@@ -415,6 +452,63 @@ service cloud.firestore {
         );
     }
 
+    function validProtectionUpdate() {
+      return resource.data.status == 'open' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['stopLoss', 'takeProfit', 'updatedAt']) &&
+        request.resource.data.updatedAt == request.time &&
+        validProtection(request.resource.data);
+    }
+
+    function validPendingOrderCreate() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'userId', 'symbol', 'marketType', 'side', 'orderType', 'quantity',
+          'limitPrice', 'stopLoss', 'takeProfit', 'status', 'createdAt',
+          'updatedAt', 'filledAt', 'filledPrice', 'fillTradeId', 'cancelledAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'symbol', 'marketType', 'side', 'orderType', 'quantity',
+          'limitPrice', 'stopLoss', 'takeProfit', 'status', 'createdAt',
+          'updatedAt', 'filledAt', 'filledPrice', 'fillTradeId', 'cancelledAt'
+        ]) &&
+        data.userId == request.auth.uid && validTradingSymbol(data.symbol) &&
+        data.marketType in ['crypto', 'forex'] && data.side == 'BUY' &&
+        data.orderType == 'limit' && data.quantity is number && data.quantity > 0 &&
+        data.limitPrice is number && data.limitPrice > 0 &&
+        (data.stopLoss == null || (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss < data.limitPrice)) &&
+        (data.takeProfit == null || (data.takeProfit is number && data.takeProfit > data.limitPrice)) &&
+        data.status == 'pending' && data.createdAt == request.time &&
+        data.updatedAt == request.time && data.filledAt == null &&
+        data.filledPrice == null && data.fillTradeId == null && data.cancelledAt == null;
+    }
+
+    function validOrderCancel() {
+      return resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'cancelledAt', 'updatedAt']) &&
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.cancelledAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+    }
+
+    function validOrderFill(orderId) {
+      let tradeId = request.resource.data.fillTradeId;
+      let tradeAfter = getAfter(/databases/$(database)/documents/trades/$(tradeId)).data;
+      return resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'filledAt', 'filledPrice', 'fillTradeId', 'updatedAt']) &&
+        request.resource.data.status == 'filled' &&
+        request.resource.data.filledAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.filledPrice is number && request.resource.data.filledPrice > 0 &&
+        request.resource.data.filledPrice <= resource.data.limitPrice &&
+        tradeAfter.orderId == orderId && tradeAfter.userId == resource.data.userId &&
+        tradeAfter.symbol == resource.data.symbol && tradeAfter.side == 'BUY' &&
+        tradeAfter.quantity == resource.data.quantity &&
+        tradeAfter.executionPrice == request.resource.data.filledPrice;
+    }
+
     match /users/{userId} {
       allow read: if ownsDocument(userId) || isAdmin();
 
@@ -436,12 +530,13 @@ service cloud.firestore {
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
 
-      allow update: if ownsDocument(userId) && isActiveUser() &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['fullName', 'updatedAt']) &&
-        request.resource.data.fullName is string &&
-        request.resource.data.fullName.size() > 0 &&
-        request.resource.data.updatedAt == request.time;
+      allow update: if (ownsDocument(userId) && isActiveUser() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['fullName', 'updatedAt']) &&
+          request.resource.data.fullName is string &&
+          request.resource.data.fullName.size() > 0 &&
+          request.resource.data.updatedAt == request.time) ||
+        validAdminRoleUpdate(userId);
     }
 
     match /wallets/{userId} {
@@ -474,7 +569,15 @@ service cloud.firestore {
     match /positions/{positionId} {
       allow read: if (isActiveUser() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isActiveUser() && validPositionCreate(positionId);
-      allow update: if isActiveUser() && resource.data.userId == request.auth.uid && validPositionUpdate();
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
+        (validPositionUpdate() || validProtectionUpdate());
+    }
+
+    match /orders/{orderId} {
+      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow create: if isActiveUser() && validPendingOrderCreate();
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
+        (validOrderCancel() || validOrderFill(orderId));
     }
 
     match /trades/{tradeId} {

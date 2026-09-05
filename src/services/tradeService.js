@@ -23,17 +23,27 @@ function validateRequest({ userId, symbol, quantity, executionPrice }) {
 }
 
 export async function executeBuy(input) {
+  return executeBuyTransaction(input)
+}
+
+async function executeBuyTransaction(input, orderId = null) {
   const { market, quantity, executionPrice, grossAmount } = validateRequest(input)
   const fee = roundMoney(grossAmount * TRADING_FEE_RATE)
   const netAmount = roundMoney(grossAmount + fee)
   const walletRef = doc(db, 'wallets', input.userId)
   const positionRef = doc(db, 'positions', positionIdFor(input.userId, input.symbol))
   const tradeRef = doc(collection(db, 'trades'))
+  const orderRef = orderId ? doc(db, 'orders', orderId) : null
 
   await runTransaction(db, async (transaction) => {
     const walletSnapshot = await transaction.get(walletRef)
     const positionSnapshot = await transaction.get(positionRef)
+    const orderSnapshot = orderRef ? await transaction.get(orderRef) : null
     if (!walletSnapshot.exists()) throw createServiceError('account/wallet-missing', 'Your wallet was not found.')
+    if (orderRef && (!orderSnapshot.exists() || orderSnapshot.data().userId !== input.userId)) throw createServiceError('trading/order-missing', 'This order no longer exists.')
+    if (orderSnapshot && orderSnapshot.data().status !== 'pending') throw createServiceError(`trading/order-${orderSnapshot.data().status}`, `This order is already ${orderSnapshot.data().status}.`)
+    if (orderSnapshot && (orderSnapshot.data().symbol !== input.symbol || orderSnapshot.data().side !== 'BUY' || orderSnapshot.data().orderType !== 'limit')) throw createServiceError('trading/order-missing', 'This pending order is invalid.')
+    if (orderSnapshot && executionPrice > orderSnapshot.data().limitPrice) throw createServiceError('trading/order-condition', 'The limit price condition is not currently satisfied.')
     const wallet = walletSnapshot.data()
     if (wallet.availableBalance < netAmount) throw createServiceError('trading/insufficient-balance', 'Insufficient balance.')
 
@@ -51,6 +61,8 @@ export async function executeBuy(input) {
       investedAmount: roundMoney((current?.investedAmount || 0) + grossAmount),
       realizedPnl: current?.realizedPnl || 0,
       status: 'open',
+      stopLoss: input.stopLoss ?? current?.stopLoss ?? null,
+      takeProfit: input.takeProfit ?? current?.takeProfit ?? null,
       updatedAt: serverTimestamp(),
       lastTradeId: tradeRef.id,
     }
@@ -58,9 +70,24 @@ export async function executeBuy(input) {
     transaction.update(walletRef, { availableBalance: roundMoney(wallet.availableBalance - netAmount), updatedAt: serverTimestamp(), lastTradeId: tradeRef.id })
     if (positionSnapshot.exists()) transaction.update(positionRef, position)
     else transaction.set(positionRef, { ...position, createdAt: serverTimestamp() })
-    transaction.set(tradeRef, { userId: input.userId, symbol: input.symbol, marketType: market.type, side: 'BUY', quantity, executionPrice, grossAmount, fee, netAmount, realizedPnl: 0, status: 'filled', createdAt: serverTimestamp() })
+    const trade = { userId: input.userId, symbol: input.symbol, marketType: market.type, side: 'BUY', quantity, executionPrice, grossAmount, fee, netAmount, realizedPnl: 0, status: 'filled', createdAt: serverTimestamp() }
+    if (orderId) trade.orderId = orderId
+    transaction.set(tradeRef, trade)
+    if (orderRef) transaction.update(orderRef, { status: 'filled', filledAt: serverTimestamp(), filledPrice: executionPrice, fillTradeId: tradeRef.id, updatedAt: serverTimestamp() })
   })
   return tradeRef.id
+}
+
+export async function executePendingLimitBuy({ order, executionPrice }) {
+  if (!order?.id) throw createServiceError('trading/order-missing', 'This order no longer exists.')
+  return executeBuyTransaction({
+    userId: order.userId,
+    symbol: order.symbol,
+    quantity: order.quantity,
+    executionPrice,
+    stopLoss: order.stopLoss,
+    takeProfit: order.takeProfit,
+  }, order.id)
 }
 
 export async function executeSell(input) {
@@ -89,6 +116,8 @@ export async function executeSell(input) {
       investedAmount: remainingQuantity === 0 ? 0 : roundMoney(current.averageEntryPrice * remainingQuantity),
       realizedPnl: roundMoney((current.realizedPnl || 0) + realizedPnl),
       status: remainingQuantity === 0 ? 'closed' : 'open',
+      stopLoss: remainingQuantity === 0 ? null : (current.stopLoss ?? null),
+      takeProfit: remainingQuantity === 0 ? null : (current.takeProfit ?? null),
       updatedAt: serverTimestamp(),
       lastTradeId: tradeRef.id,
     })

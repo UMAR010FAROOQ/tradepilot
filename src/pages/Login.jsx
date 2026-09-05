@@ -5,6 +5,7 @@ import Button from '../components/common/Button.jsx'
 import Input from '../components/common/Input.jsx'
 import useAuth from '../hooks/useAuth.js'
 import { getFirebaseErrorMessage } from '../utils/firebaseErrors.js'
+import { needsEmailVerification } from '../utils/emailVerification.js'
 
 function Login() {
   const [email, setEmail] = useState('')
@@ -24,7 +25,7 @@ function Login() {
     return <p className="py-10 text-center text-sm text-muted">Checking your session…</p>
   }
 
-  if (currentUser) return <Navigate replace to="/dashboard" />
+  if (currentUser) return <Navigate replace to={needsEmailVerification(currentUser) ? '/verify-email' : '/dashboard'} />
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -38,8 +39,12 @@ function Login() {
     setIsSubmitting(true)
 
     try {
-      await login(email.trim(), password)
-      navigate(redirectTo, { replace: true })
+      const credential = await login(email.trim(), password)
+      if (needsEmailVerification(credential.user)) {
+        navigate('/verify-email', { replace: true, state: { email: email.trim(), returnTo: redirectTo } })
+      } else {
+        navigate(redirectTo, { replace: true })
+      }
     } catch (firebaseError) {
       setError(getFirebaseErrorMessage(firebaseError))
     } finally {

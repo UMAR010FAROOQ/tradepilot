@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { CandlestickSeries, ColorType, CrosshairMode, createChart } from 'lightweight-charts'
+import { CandlestickSeries, ColorType, CrosshairMode, LineStyle, createChart } from 'lightweight-charts'
 import { marketBySymbol } from '../../data/markets.js'
 
-function TradingChart({ data, symbol, interval, livePrice, className = '' }) {
+function TradingChart({ data, symbol, interval, livePrice, priceLevels = [], resetSignal = 0, className = '' }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const seriesRef = useRef(null)
+  const priceLinesRef = useRef([])
 
   useEffect(() => {
     const container = containerRef.current
@@ -33,6 +34,9 @@ function TradingChart({ data, symbol, interval, livePrice, className = '' }) {
       upColor: '#16c784', downColor: '#ea3943',
       wickUpColor: '#16c784', wickDownColor: '#ea3943',
       borderUpColor: '#16c784', borderDownColor: '#ea3943',
+      priceLineVisible: true,
+      priceLineColor: '#3b82f6',
+      priceLineStyle: LineStyle.Dashed,
     })
     chartRef.current = chart
     seriesRef.current = series
@@ -55,6 +59,23 @@ function TradingChart({ data, symbol, interval, livePrice, className = '' }) {
     seriesRef.current.setData(data)
     chartRef.current.timeScale().fitContent()
   }, [data, symbol, interval])
+
+  useEffect(() => {
+    if (!seriesRef.current) return
+    priceLinesRef.current.forEach((line) => seriesRef.current.removePriceLine(line))
+    priceLinesRef.current = priceLevels.filter((level) => Number.isFinite(level.price)).map((level) => seriesRef.current.createPriceLine({
+      price: level.price,
+      color: level.color,
+      lineWidth: 1,
+      lineStyle: level.style ?? LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: level.label,
+    }))
+  }, [priceLevels])
+
+  useEffect(() => {
+    if (resetSignal) chartRef.current?.timeScale().fitContent()
+  }, [resetSignal])
 
   useEffect(() => {
     const latest = data.at(-1)

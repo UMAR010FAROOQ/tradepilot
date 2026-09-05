@@ -1,7 +1,7 @@
 import { BanknoteArrowDown, BanknoteArrowUp, CandlestickChart, LayoutDashboard, LogOut, ReceiptText, Users, X } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
-import Button from '../common/Button.jsx'
+import IconButton from '../common/IconButton.jsx'
 import { cn } from '../../utils/cn.js'
 
 const links = [
@@ -29,7 +29,7 @@ function AdminSidebar({ className, mobile = false, onClose }) {
           <p className="text-base font-bold tracking-tight">TradePilot</p>
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Administration</p>
         </div>
-        {mobile && <Button aria-label="Close navigation" className="size-9 px-0" onClick={onClose} variant="ghost"><X className="size-4" /></Button>}
+        {mobile && <IconButton aria-label="Close navigation" icon={X} iconSize="lg" onClick={onClose} size="lg" variant="close" />}
       </div>
       <nav aria-label="Admin navigation" className="sidebar-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
         {links.map(({ to, label, icon: Icon, end }) => (

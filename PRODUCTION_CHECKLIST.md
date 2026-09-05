@@ -40,7 +40,9 @@ not enable real-money trade execution or automatic funding.
 - [ ] Install the Firebase CLI if needed, then authenticate with `firebase login`.
 - [ ] Select the intended Firebase project with `firebase use --add`. The checked-in default alias currently points to `tradepilot-3591a`; confirm it before every deployment.
 - [ ] In Firebase Authentication, enable the intended sign-in providers and confirm Email/Password is enabled.
+- [ ] Review the Firebase Authentication verification-email template and sender name before inviting users.
 - [ ] In Authentication **Settings > Authorized domains**, add the final Firebase Hosting domain and any approved custom domain. Keep localhost only when local development is required.
+- [ ] Verify each existing Email/Password account once, including existing administrator accounts. There are no hidden admin bypasses for legacy unverified accounts.
 - [ ] Confirm Firestore is in the intended region and that production data is backed up according to the project's operational needs.
 - [ ] Deploy and verify security configuration first:
 
@@ -86,6 +88,7 @@ enforcing it so authentication and market data are not accidentally broken.
 ## Post-release regression
 
 - [ ] Create and sign in to a test account, then sign out and reset its password.
+- [ ] Confirm a new signup receives a Firebase verification link, cannot open protected routes before verification, and can resend only after authenticating with its password.
 - [ ] Confirm live profile role/status updates take effect without a new login.
 - [ ] Exercise simulated buy, sell, and close flows; verify balances, positions, history, and analytics agree.
 - [ ] Submit test deposit and withdrawal requests and verify administrator approval/rejection and user notification flows.

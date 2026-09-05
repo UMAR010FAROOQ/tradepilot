@@ -1,7 +1,10 @@
 import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
+  getIdToken,
   reauthenticateWithCredential,
+  reload,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
@@ -24,6 +27,37 @@ export function logout() {
 
 export function resetPassword(email) {
   return sendPasswordResetEmail(auth, email)
+}
+
+export function sendVerificationEmail(user = auth.currentUser) {
+  if (!user) {
+    const error = new Error('Sign in before requesting another verification email.')
+    error.code = 'auth/requires-authentication'
+    throw error
+  }
+  return sendEmailVerification(user)
+}
+
+export async function refreshEmailVerification(user = auth.currentUser) {
+  if (!user) {
+    const error = new Error('Sign in before checking email verification.')
+    error.code = 'auth/requires-authentication'
+    throw error
+  }
+  await reload(user)
+  await getIdToken(user, true)
+  return user.emailVerified
+}
+
+export async function resendVerificationWithCredentials(email, password) {
+  const credential = await signInWithEmailAndPassword(auth, email, password)
+  try {
+    if (credential.user.emailVerified) return { alreadyVerified: true }
+    await sendEmailVerification(credential.user)
+    return { alreadyVerified: false }
+  } finally {
+    await signOut(auth)
+  }
 }
 
 export async function changePassword(currentPassword, newPassword) {

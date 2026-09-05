@@ -9,16 +9,17 @@ import {
   Gauge,
   LogOut,
   LockKeyhole,
+  X,
   ShieldCheck,
   Star,
   UserRound,
   WalletCards,
-  X,
 } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import { cn } from '../../utils/cn.js'
 import Button from '../common/Button.jsx'
+import IconButton from '../common/IconButton.jsx'
 
 const navigationGroups = [
   {
@@ -94,14 +95,14 @@ function Sidebar({ mobile = false, onClose, className }) {
           </span>
         </NavLink>
         {mobile && (
-          <Button
+          <IconButton
             aria-label="Close navigation"
-            className="size-9 px-0"
+            icon={X}
+            iconSize="lg"
             onClick={onClose}
-            variant="ghost"
-          >
-            <X aria-hidden="true" className="size-4" />
-          </Button>
+            size="lg"
+            variant="close"
+          />
         )}
       </div>
 

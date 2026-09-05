@@ -1,7 +1,7 @@
 import { Menu, ShieldCheck } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
-import Button from '../common/Button.jsx'
+import IconButton from '../common/IconButton.jsx'
 
 const titles = {
   '/admin': 'Overview', '/admin/users': 'Users', '/admin/deposits': 'Deposits',
@@ -16,7 +16,7 @@ function AdminNavbar({ onMenuClick }) {
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex h-18 items-center border-b border-border bg-canvas/90 px-4 backdrop-blur-xl md:left-64 md:px-7">
-      <Button aria-label="Open admin navigation" className="mr-3 size-9 px-0 md:hidden" onClick={onMenuClick} variant="ghost"><Menu className="size-5" /></Button>
+      <IconButton aria-label="Open admin navigation" className="mr-3 md:hidden" icon={Menu} iconSize="lg" onClick={onMenuClick} size="lg" variant="prominent" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Admin console</p>
         <p className="truncate text-base font-semibold">{titles[pathname] || 'Administration'}</p>
