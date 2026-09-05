@@ -298,11 +298,41 @@ service cloud.firestore {
       ];
     }
 
+    function validTpTarget(target, entryPrice) {
+      return target.keys().hasAll(['id', 'price', 'closePercent', 'status']) &&
+        target.keys().hasOnly(['id', 'price', 'closePercent', 'status']) &&
+        target.id is string && target.id.size() > 0 &&
+        target.price is number && target.price > entryPrice &&
+        target.closePercent is number && target.closePercent > 0 && target.closePercent <= 100 &&
+        target.status in ['pending', 'triggered', 'cancelled'];
+    }
+
+    function validTargets(data) {
+      return !data.keys().hasAny(['takeProfitTargets']) ||
+        (data.takeProfitTargets is list && data.takeProfitTargets.size() <= 3 &&
+         (data.takeProfitTargets.size() < 1 || validTpTarget(data.takeProfitTargets[0], data.averageEntryPrice)) &&
+         (data.takeProfitTargets.size() < 2 || (validTpTarget(data.takeProfitTargets[1], data.averageEntryPrice) && data.takeProfitTargets[1].price > data.takeProfitTargets[0].price)) &&
+         (data.takeProfitTargets.size() < 3 || (validTpTarget(data.takeProfitTargets[2], data.averageEntryPrice) && data.takeProfitTargets[2].price > data.takeProfitTargets[1].price)) &&
+         (data.takeProfitTargets.size() < 1 || data.takeProfitTargets[0].closePercent +
+           (data.takeProfitTargets.size() > 1 ? data.takeProfitTargets[1].closePercent : 0) +
+           (data.takeProfitTargets.size() > 2 ? data.takeProfitTargets[2].closePercent : 0) <= 100) &&
+         (data.takeProfitTargets.size() == 0 ||
+           (data.takeProfitBaseQuantity is number && data.takeProfitBaseQuantity > 0)));
+    }
+
     function validProtection(data) {
-      return (data.stopLoss == null ||
-          (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss < data.averageEntryPrice)) &&
-        (data.takeProfit == null ||
-          (data.takeProfit is number && data.takeProfit > data.averageEntryPrice));
+      return (!data.keys().hasAny(['stopLoss']) || data.stopLoss == null ||
+          (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss <= data.averageEntryPrice * 1.003)) &&
+        (!data.keys().hasAny(['takeProfit']) || data.takeProfit == null ||
+          (data.takeProfit is number && data.takeProfit > data.averageEntryPrice)) &&
+        validTargets(data) &&
+        (!data.keys().hasAny(['trailingStopEnabled']) ||
+          (data.trailingStopEnabled == false) ||
+          (data.trailingStopEnabled == true &&
+           data.trailingStopPercent is number && data.trailingStopPercent >= 0.1 && data.trailingStopPercent <= 25 &&
+           data.trailingHighWaterMark is number && data.trailingHighWaterMark >= data.averageEntryPrice &&
+           data.trailingStopPrice is number && data.trailingStopPrice > 0 &&
+           closeEnough(data.trailingStopPrice, data.trailingHighWaterMark * (1 - data.trailingStopPercent / 100))));
     }
 
     function validTradeShape(tradeId, tradeData) {
@@ -318,7 +348,7 @@ service cloud.firestore {
         tradeData.keys().hasOnly([
           'userId', 'symbol', 'marketType', 'side', 'quantity',
           'executionPrice', 'grossAmount', 'fee', 'netAmount',
-          'realizedPnl', 'status', 'createdAt', 'orderId'
+          'realizedPnl', 'status', 'createdAt', 'orderId', 'closeReason', 'automationId'
         ]) &&
         tradeData.userId == request.auth.uid &&
         tradeData.symbol is string &&
@@ -354,9 +384,12 @@ service cloud.firestore {
         ) &&
         tradeData.status == 'filled' &&
         tradeData.createdAt == request.time &&
+        (!tradeData.keys().hasAny(['closeReason']) ||
+          (tradeData.side == 'SELL' && tradeData.closeReason in ['stopLoss', 'trailingStop', 'takeProfit'])) &&
+        (!tradeData.keys().hasAny(['automationId']) ||
+          (tradeData.closeReason == 'takeProfit' && tradeData.automationId is string)) &&
         (!tradeData.keys().hasAny(['orderId']) ||
-          (tradeData.side == 'BUY' &&
-           getAfter(/databases/$(database)/documents/orders/$(tradeData.orderId)).data.status == 'filled' &&
+          (getAfter(/databases/$(database)/documents/orders/$(tradeData.orderId)).data.status == 'filled' &&
            getAfter(/databases/$(database)/documents/orders/$(tradeData.orderId)).data.fillTradeId == tradeId)) &&
         getAfter(/databases/$(database)/documents/wallets/$(tradeData.userId)).data.lastTradeId == tradeId &&
         getAfter(/databases/$(database)/documents/positions/$(positionId)).data.lastTradeId == tradeId;
@@ -391,7 +424,9 @@ service cloud.firestore {
         hasExactFields([
           'userId', 'symbol', 'marketType', 'quantity', 'averageEntryPrice',
           'investedAmount', 'realizedPnl', 'status', 'createdAt',
-          'updatedAt', 'lastTradeId', 'stopLoss', 'takeProfit'
+          'updatedAt', 'lastTradeId', 'openedAt', 'stopLoss', 'takeProfit',
+          'takeProfitTargets', 'takeProfitBaseQuantity', 'trailingStopEnabled',
+          'trailingStopPercent', 'trailingHighWaterMark', 'trailingStopPrice'
         ]) &&
         positionId == request.auth.uid + '_' + request.resource.data.symbol &&
         request.resource.data.userId == request.auth.uid &&
@@ -399,6 +434,7 @@ service cloud.firestore {
         request.resource.data.quantity > 0 &&
         request.resource.data.realizedPnl == 0 &&
         request.resource.data.status == 'open' &&
+        request.resource.data.openedAt == request.time &&
         validProtection(request.resource.data) &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time &&
@@ -418,7 +454,9 @@ service cloud.firestore {
       return !exists(tradePath) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'quantity', 'averageEntryPrice', 'investedAmount', 'realizedPnl',
-          'status', 'updatedAt', 'lastTradeId', 'stopLoss', 'takeProfit'
+          'status', 'updatedAt', 'lastTradeId', 'openedAt', 'stopLoss', 'takeProfit',
+          'takeProfitTargets', 'takeProfitBaseQuantity', 'trailingStopEnabled',
+          'trailingStopPercent', 'trailingHighWaterMark', 'trailingStopPrice'
         ]) &&
         request.resource.data.updatedAt == request.time &&
         request.resource.data.quantity >= 0 &&
@@ -455,7 +493,11 @@ service cloud.firestore {
     function validProtectionUpdate() {
       return resource.data.status == 'open' &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['stopLoss', 'takeProfit', 'updatedAt']) &&
+          .hasOnly([
+            'stopLoss', 'takeProfit', 'takeProfitTargets', 'takeProfitBaseQuantity',
+            'trailingStopEnabled', 'trailingStopPercent', 'trailingHighWaterMark',
+            'trailingStopPrice', 'updatedAt'
+          ]) &&
         request.resource.data.updatedAt == request.time &&
         validProtection(request.resource.data);
     }
@@ -464,20 +506,24 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.keys().hasAll([
           'userId', 'symbol', 'marketType', 'side', 'orderType', 'quantity',
-          'limitPrice', 'stopLoss', 'takeProfit', 'status', 'createdAt',
+          'limitPrice', 'stopLoss', 'takeProfit', 'reduceOnly', 'status', 'createdAt',
           'updatedAt', 'filledAt', 'filledPrice', 'fillTradeId', 'cancelledAt'
         ]) &&
         data.keys().hasOnly([
           'userId', 'symbol', 'marketType', 'side', 'orderType', 'quantity',
-          'limitPrice', 'stopLoss', 'takeProfit', 'status', 'createdAt',
+          'limitPrice', 'stopLoss', 'takeProfit', 'reduceOnly', 'status', 'createdAt',
           'updatedAt', 'filledAt', 'filledPrice', 'fillTradeId', 'cancelledAt'
         ]) &&
         data.userId == request.auth.uid && validTradingSymbol(data.symbol) &&
-        data.marketType in ['crypto', 'forex'] && data.side == 'BUY' &&
+        data.marketType in ['crypto', 'forex'] && data.side in ['BUY', 'SELL'] &&
         data.orderType == 'limit' && data.quantity is number && data.quantity > 0 &&
         data.limitPrice is number && data.limitPrice > 0 &&
-        (data.stopLoss == null || (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss < data.limitPrice)) &&
-        (data.takeProfit == null || (data.takeProfit is number && data.takeProfit > data.limitPrice)) &&
+        ((data.side == 'BUY' && data.reduceOnly == false &&
+          (data.stopLoss == null || (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss < data.limitPrice)) &&
+          (data.takeProfit == null || (data.takeProfit is number && data.takeProfit > data.limitPrice))) ||
+         (data.side == 'SELL' && data.reduceOnly == true && data.stopLoss == null && data.takeProfit == null &&
+          get(/databases/$(database)/documents/positions/$(request.auth.uid + '_' + data.symbol)).data.status == 'open' &&
+          data.quantity <= get(/databases/$(database)/documents/positions/$(request.auth.uid + '_' + data.symbol)).data.quantity)) &&
         data.status == 'pending' && data.createdAt == request.time &&
         data.updatedAt == request.time && data.filledAt == null &&
         data.filledPrice == null && data.fillTradeId == null && data.cancelledAt == null;
@@ -492,6 +538,22 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time;
     }
 
+    function validOrderEdit() {
+      return resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['quantity', 'limitPrice', 'stopLoss', 'takeProfit', 'updatedAt']) &&
+        request.resource.data.quantity is number && request.resource.data.quantity > 0 &&
+        request.resource.data.limitPrice is number && request.resource.data.limitPrice > 0 &&
+        ((resource.data.side == 'BUY' &&
+          (request.resource.data.stopLoss == null || (request.resource.data.stopLoss is number && request.resource.data.stopLoss > 0 && request.resource.data.stopLoss < request.resource.data.limitPrice)) &&
+          (request.resource.data.takeProfit == null || (request.resource.data.takeProfit is number && request.resource.data.takeProfit > request.resource.data.limitPrice))) ||
+         (resource.data.side == 'SELL' && resource.data.reduceOnly == true &&
+          request.resource.data.stopLoss == null && request.resource.data.takeProfit == null &&
+          get(/databases/$(database)/documents/positions/$(request.auth.uid + '_' + resource.data.symbol)).data.status == 'open' &&
+          request.resource.data.quantity <= get(/databases/$(database)/documents/positions/$(request.auth.uid + '_' + resource.data.symbol)).data.quantity)) &&
+        request.resource.data.updatedAt == request.time;
+    }
+
     function validOrderFill(orderId) {
       let tradeId = request.resource.data.fillTradeId;
       let tradeAfter = getAfter(/databases/$(database)/documents/trades/$(tradeId)).data;
@@ -502,9 +564,10 @@ service cloud.firestore {
         request.resource.data.filledAt == request.time &&
         request.resource.data.updatedAt == request.time &&
         request.resource.data.filledPrice is number && request.resource.data.filledPrice > 0 &&
-        request.resource.data.filledPrice <= resource.data.limitPrice &&
+        ((resource.data.side == 'BUY' && request.resource.data.filledPrice <= resource.data.limitPrice) ||
+         (resource.data.side == 'SELL' && resource.data.reduceOnly == true && request.resource.data.filledPrice >= resource.data.limitPrice)) &&
         tradeAfter.orderId == orderId && tradeAfter.userId == resource.data.userId &&
-        tradeAfter.symbol == resource.data.symbol && tradeAfter.side == 'BUY' &&
+        tradeAfter.symbol == resource.data.symbol && tradeAfter.side == resource.data.side &&
         tradeAfter.quantity == resource.data.quantity &&
         tradeAfter.executionPrice == request.resource.data.filledPrice;
     }
@@ -577,7 +640,7 @@ service cloud.firestore {
       allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
       allow create: if isActiveUser() && validPendingOrderCreate();
       allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
-        (validOrderCancel() || validOrderFill(orderId));
+        (validOrderCancel() || validOrderEdit() || validOrderFill(orderId));
     }
 
     match /trades/{tradeId} {

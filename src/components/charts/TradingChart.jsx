@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { CandlestickSeries, ColorType, CrosshairMode, LineStyle, createChart } from 'lightweight-charts'
+import { CandlestickSeries, ColorType, CrosshairMode, LineStyle, createChart, createSeriesMarkers } from 'lightweight-charts'
 import { marketBySymbol } from '../../data/markets.js'
 
-function TradingChart({ data, symbol, interval, livePrice, priceLevels = [], resetSignal = 0, className = '' }) {
+function TradingChart({ data, symbol, interval, livePrice, priceLevels = [], tradeMarkers = [], resetSignal = 0, className = '' }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const seriesRef = useRef(null)
   const priceLinesRef = useRef([])
+  const markersRef = useRef(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -40,6 +41,7 @@ function TradingChart({ data, symbol, interval, livePrice, priceLevels = [], res
     })
     chartRef.current = chart
     seriesRef.current = series
+    markersRef.current = createSeriesMarkers(series, [])
 
     const observer = new ResizeObserver(() => chart.resize(container.clientWidth, container.clientHeight))
     observer.observe(container)
@@ -48,6 +50,7 @@ function TradingChart({ data, symbol, interval, livePrice, priceLevels = [], res
       chart.remove()
       chartRef.current = null
       seriesRef.current = null
+      markersRef.current = null
     }
   }, [])
 
@@ -72,6 +75,17 @@ function TradingChart({ data, symbol, interval, livePrice, priceLevels = [], res
       title: level.label,
     }))
   }, [priceLevels])
+
+  useEffect(() => {
+    if (!markersRef.current || !data.length) return
+    const markers = tradeMarkers.map((trade) => {
+      const created = trade.createdAt?.toDate?.()?.getTime() / 1000
+      if (!Number.isFinite(created)) return null
+      const candle = data.reduce((closest, item) => item.time <= created ? item : closest, data[0])
+      return { time: candle.time, position: trade.side === 'BUY' ? 'belowBar' : 'aboveBar', color: trade.side === 'BUY' ? '#16c784' : '#ea3943', shape: trade.side === 'BUY' ? 'arrowUp' : 'arrowDown', text: trade.side }
+    }).filter(Boolean).sort((first, second) => first.time - second.time)
+    markersRef.current.setMarkers(markers)
+  }, [data, tradeMarkers])
 
   useEffect(() => {
     if (resetSignal) chartRef.current?.timeScale().fitContent()

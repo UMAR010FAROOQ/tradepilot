@@ -10,13 +10,14 @@ import OpenPositionPanel from '../components/trading/OpenPositionPanel.jsx'
 import PendingOrders from '../components/trading/PendingOrders.jsx'
 import PriceChange from '../components/trading/PriceChange.jsx'
 import RecentTrades from '../components/trading/RecentTrades.jsx'
+import TradingCalculator from '../components/trading/TradingCalculator.jsx'
 import { marketBySymbol, markets } from '../data/markets.js'
 import useAuth from '../hooks/useAuth.js'
 import useWallet from '../hooks/useWallet.js'
 import { getHistoricalCandles, subscribeToTicker } from '../services/marketService.js'
-import { subscribeToPendingOrders } from '../services/orderService.js'
+import { subscribeToSymbolOrders } from '../services/orderService.js'
 import { subscribeToPosition } from '../services/positionService.js'
-import { subscribeToTrades } from '../services/tradeService.js'
+import { subscribeToSymbolTrades } from '../services/tradeService.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { formatPrice, formatVolume } from '../utils/marketFormatters.js'
 import { getForexSessionStatus } from '../utils/forexSession.js'
@@ -44,6 +45,7 @@ function Trade() {
   const [resetSignal, setResetSignal] = useState(0)
   const [pendingOrders, setPendingOrders] = useState([])
   const [trades, setTrades] = useState([])
+  const [showTradeLevels, setShowTradeLevels] = useState(true)
   const { currentUser } = useAuth()
   const { wallet } = useWallet()
   const navigate = useNavigate()
@@ -76,8 +78,8 @@ function Trade() {
     )
   }, [currentUser.uid, symbol])
 
-  useEffect(() => subscribeToPendingOrders(currentUser.uid, symbol, setPendingOrders, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid, symbol])
-  useEffect(() => subscribeToTrades(currentUser.uid, setTrades, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid])
+  useEffect(() => subscribeToSymbolOrders(currentUser.uid, symbol, setPendingOrders, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid, symbol])
+  useEffect(() => subscribeToSymbolTrades(currentUser.uid, symbol, setTrades, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid, symbol])
 
   const stats = useMemo(() => ticker ? [
     ['24h high', formatPrice(ticker.high24h, market)],
@@ -86,17 +88,20 @@ function Trade() {
   ] : [], [market, ticker])
   const forexSession = market.type === 'forex' ? getForexSessionStatus() : null
   const marketOpen = market.type === 'crypto' || Boolean(forexSession?.isOpen && ticker?.marketStatus === 'Open' && ticker?.connectionStatus === 'live' && !ticker?.isStale)
-  const selectedTrades = useMemo(() => trades.filter((trade) => trade.symbol === symbol).slice(0, 5), [symbol, trades])
+  const selectedTrades = useMemo(() => trades.slice(0, 5), [trades])
+  const openOrders = useMemo(() => pendingOrders.filter((order) => order.status === 'pending'), [pendingOrders])
   const chartLevels = useMemo(() => {
     const levels = []
     if (position?.status === 'open') {
       levels.push({ label: 'Entry', price: position.averageEntryPrice, color: '#8b98a8', style: 2 })
       if (position.stopLoss) levels.push({ label: 'SL', price: position.stopLoss, color: '#ea3943', style: 3 })
-      if (position.takeProfit) levels.push({ label: 'TP', price: position.takeProfit, color: '#16c784', style: 3 })
+      if (position.trailingStopEnabled && position.trailingStopPrice) levels.push({ label: 'TRAIL', price: position.trailingStopPrice, color: '#f59e0b', style: 1 })
+      if (position.takeProfitTargets?.length) position.takeProfitTargets.filter((target) => target.status === 'pending').forEach((target, index) => levels.push({ label: `TP${index + 1}`, price: target.price, color: '#16c784', style: index % 2 ? 2 : 3 }))
+      else if (position.takeProfit) levels.push({ label: 'TP', price: position.takeProfit, color: '#16c784', style: 3 })
     }
-    pendingOrders.forEach((order) => levels.push({ label: 'Limit', price: order.limitPrice, color: '#f59e0b', style: 1 }))
-    return levels
-  }, [pendingOrders, position])
+    openOrders.forEach((order) => levels.push({ label: `LIMIT ${order.side}`, price: order.limitPrice, color: order.side === 'BUY' ? '#3b82f6' : '#ea3943', style: order.side === 'BUY' ? 1 : 2 }))
+    return showTradeLevels ? levels : []
+  }, [openOrders, position, showTradeLevels])
 
   useEffect(() => {
     if (!chartExpanded) return undefined
@@ -134,12 +139,12 @@ function Trade() {
         <Card className={chartExpanded ? 'fixed inset-3 z-50 min-w-0 overflow-auto bg-surface sm:inset-6' : 'min-w-0'} padding="none">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
             <div className="flex items-center gap-2"><ChartCandlestick className="size-4 text-accent" /><span className="text-xs font-semibold">Price chart</span></div>
-            <div className="flex items-center gap-1">{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<IconButton aria-label="Reset chart view" className="ml-1" icon={RotateCcw} onClick={() => setResetSignal((value) => value + 1)} size="sm" title="Reset chart view" /><IconButton aria-label={chartExpanded ? 'Restore chart' : 'Expand chart'} icon={chartExpanded ? Minimize : Maximize} onClick={() => setChartExpanded((value) => !value)} size="sm" title={chartExpanded ? 'Restore chart' : 'Expand chart'} /></div>
+            <div className="flex flex-wrap items-center gap-1"><button aria-pressed={showTradeLevels} className={`h-8 rounded-md px-2.5 text-[11px] font-semibold ${showTradeLevels ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-elevated'}`} onClick={() => setShowTradeLevels((value) => !value)} type="button">Trade Levels</button>{timeframes.map((item) => <button aria-pressed={interval === item} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${interval === item ? 'bg-accent text-white' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={item} onClick={() => selectInterval(item)} type="button">{item}</button>)}<TradingCalculator defaultEntry={ticker?.price} walletBalance={wallet?.availableBalance} /><IconButton aria-label="Reset chart view" icon={RotateCcw} onClick={() => setResetSignal((value) => value + 1)} size="sm" title="Reset chart view" /><IconButton aria-label={chartExpanded ? 'Restore chart' : 'Expand chart'} icon={chartExpanded ? Minimize : Maximize} onClick={() => setChartExpanded((value) => !value)} size="sm" title={chartExpanded ? 'Restore chart' : 'Expand chart'} /></div>
           </div>
-          {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={ticker?.price} priceLevels={chartLevels} resetSignal={resetSignal} symbol={symbol} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
+          {loading ? <div className="grid h-[450px] place-items-center" role="status"><div className="text-center"><Activity className="mx-auto size-6 animate-pulse text-accent" /><p className="mt-2 text-xs text-muted">Loading chart data…</p></div></div> : candles.length ? <Suspense fallback={<div className="grid h-[450px] place-items-center text-sm text-muted">Preparing chart…</div>}><TradingChart data={candles} interval={interval} livePrice={ticker?.price} priceLevels={chartLevels} resetSignal={resetSignal} symbol={symbol} tradeMarkers={trades} /></Suspense> : <div className="grid h-[450px] place-items-center text-sm text-muted">No chart data available.</div>}
         </Card>
 
-        <Card padding="none"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">Simulated order</h2><p className="mt-1 text-xs text-muted">Long-only · no leverage, margin, or short selling</p></div><OrderPanel market={market} marketOpen={marketOpen} onComplete={setTradeNotice} ticker={ticker} userId={currentUser.uid} wallet={wallet} /></Card>
+        <Card padding="none"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">Simulated order</h2><p className="mt-1 text-xs text-muted">Long-only · no leverage, margin, or short selling</p></div><OrderPanel market={market} marketOpen={marketOpen} onComplete={setTradeNotice} position={position} ticker={ticker} userId={currentUser.uid} wallet={wallet} /></Card>
       </div>
       {!positionLoading && <OpenPositionPanel market={market} marketOpen={marketOpen} onComplete={setTradeNotice} position={position} ticker={ticker} userId={currentUser.uid} />}
       <PendingOrders market={market} onComplete={setTradeNotice} orders={pendingOrders} userId={currentUser.uid} />
