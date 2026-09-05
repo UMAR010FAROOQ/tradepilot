@@ -1,14 +1,12 @@
 import { createContext, useEffect, useMemo, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../services/firebase.js'
 import * as authService from '../services/authService.js'
 import { initializeUserAccount } from '../services/accountService.js'
 
 const AuthContext = createContext(undefined)
 const profileCache = new Map()
-const profileRequests = new Map()
-const PROFILE_READ_TIMEOUT = 10000
 
 function createProfileFallback(user) {
   return {
@@ -21,46 +19,6 @@ function createProfileFallback(user) {
   }
 }
 
-function withProfileTimeout(request) {
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(
-      () => reject(new Error('Firestore profile request timed out.')),
-      PROFILE_READ_TIMEOUT,
-    )
-
-    request.then(
-      (profile) => {
-        clearTimeout(timeoutId)
-        resolve(profile)
-      },
-      (error) => {
-        clearTimeout(timeoutId)
-        reject(error)
-      },
-    )
-  })
-}
-
-async function fetchUserProfile(user) {
-  if (profileCache.has(user.uid)) return profileCache.get(user.uid)
-
-  if (!profileRequests.has(user.uid)) {
-    const request = getDoc(doc(db, 'users', user.uid))
-      .then((snapshot) =>
-        snapshot.exists() ? snapshot.data() : createProfileFallback(user),
-      )
-      .then((profile) => {
-        profileCache.set(user.uid, profile)
-        return profile
-      })
-      .finally(() => profileRequests.delete(user.uid))
-
-    profileRequests.set(user.uid, request)
-  }
-
-  return withProfileTimeout(profileRequests.get(user.uid))
-}
-
 function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
@@ -68,11 +26,14 @@ function AuthProvider({ children }) {
 
   useEffect(() => {
     let isActive = true
+    let unsubscribeProfile = () => {}
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!isActive) return
+      unsubscribeProfile()
 
       setCurrentUser(user)
+      setLoading(true)
 
       if (!user) {
         setUserProfile(null)
@@ -80,14 +41,21 @@ function AuthProvider({ children }) {
         return
       }
 
-      try {
-        const profile = await fetchUserProfile(user)
-        if (isActive) setUserProfile(profile)
-      } catch {
-        if (isActive) setUserProfile(createProfileFallback(user))
-      } finally {
-        if (isActive) setLoading(false)
-      }
+      unsubscribeProfile = onSnapshot(
+        doc(db, 'users', user.uid),
+        (snapshot) => {
+          if (!isActive) return
+          const profile = snapshot.exists() ? snapshot.data() : createProfileFallback(user)
+          profileCache.set(user.uid, profile)
+          setUserProfile(profile)
+          setLoading(false)
+        },
+        () => {
+          if (!isActive) return
+          setUserProfile(createProfileFallback(user))
+          setLoading(false)
+        },
+      )
 
       initializeUserAccount(user).catch(() => {
         // WalletContext exposes a recoverable missing-wallet error if setup remains incomplete.
@@ -96,6 +64,7 @@ function AuthProvider({ children }) {
 
     return () => {
       isActive = false
+      unsubscribeProfile()
       unsubscribe()
     }
   }, [])

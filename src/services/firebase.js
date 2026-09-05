@@ -17,7 +17,7 @@ const missingConfigKeys = Object.entries(firebaseConfig)
 
 if (missingConfigKeys.length > 0) {
   throw new Error(
-    `Firebase configuration is incomplete. Missing: ${missingConfigKeys.join(', ')}. Copy .env.example to .env and add the project values.`,
+    `Firebase configuration is incomplete. Missing: ${missingConfigKeys.join(', ')}. Copy .env.example to .env.local and add the public web-app values.`,
   )
 }
 

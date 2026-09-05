@@ -1,20 +1,20 @@
-<<<<<<< HEAD
-# React + Vite
+# TradePilot
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+TradePilot is a dark-first React and Vite workspace for simulated Crypto,
+Forex, and Gold trading. It uses Firebase Authentication and Firestore for
+account data, Binance public endpoints for Crypto market data, and a
+Twelve Data-compatible Cloudflare Worker for Forex and Gold.
 
-Currently, two official plugins are available:
+TradePilot does not execute real-money trades. Orders, balances, positions,
+profit/loss, deposits, and withdrawals in the application are simulated or
+manually reviewed records.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local development
 
-## React Compiler
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env.local` and add the browser-safe Firebase web
+   app configuration. Add the Forex proxy URL if Forex and Gold data are needed.
+3. Run `npm run dev`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-=======
-# tradepilot
->>>>>>> a7d980174a3035e1500df0ef611be0f33f2a43ed
+Use `npm run lint` and `npm run build` before release. See
+`PRODUCTION_CHECKLIST.md` for the complete Firebase deployment process.

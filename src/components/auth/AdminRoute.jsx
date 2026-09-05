@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
+import AccountRestricted from './AccountRestricted.jsx'
 
 function AdminRoute() {
   const { currentUser, userProfile, loading } = useAuth()
@@ -14,6 +15,7 @@ function AdminRoute() {
   }
 
   if (!currentUser) return <Navigate replace state={{ from: location }} to="/login" />
+  if (userProfile?.accountStatus && userProfile.accountStatus !== 'active') return <AccountRestricted status={userProfile.accountStatus} />
   if (userProfile?.role !== 'admin') return <Navigate replace to="/dashboard" />
   return <Outlet />
 }

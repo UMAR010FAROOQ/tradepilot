@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx'
 import AdminRoute from './components/auth/AdminRoute.jsx'
@@ -6,38 +7,43 @@ import { WalletProvider } from './context/WalletContext.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import AdminLayout from './layouts/AdminLayout.jsx'
+import NetworkStatus from './components/common/NetworkStatus.jsx'
+import RouteLoadingFallback from './components/common/RouteLoadingFallback.jsx'
 import Landing from './pages/Landing.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Markets from './pages/Markets.jsx'
-import Trade from './pages/Trade.jsx'
-import Portfolio from './pages/Portfolio.jsx'
-import ActiveTrades from './pages/ActiveTrades.jsx'
-import Analytics from './pages/Analytics.jsx'
 import Wallet from './pages/Wallet.jsx'
 import Deposit from './pages/Deposit.jsx'
 import Withdraw from './pages/Withdraw.jsx'
-import Transactions from './pages/Transactions.jsx'
-import Watchlist from './pages/Watchlist.jsx'
-import Profile from './pages/Profile.jsx'
-import Security from './pages/Security.jsx'
-import Support from './pages/Support.jsx'
 import NotFound from './pages/NotFound.jsx'
-import AdminDashboard from './pages/admin/AdminDashboard.jsx'
-import AdminUsers from './pages/admin/Users.jsx'
-import AdminDeposits from './pages/admin/Deposits.jsx'
-import AdminWithdrawals from './pages/admin/Withdrawals.jsx'
-import AdminTransactions from './pages/admin/Transactions.jsx'
-import AdminTrades from './pages/admin/Trades.jsx'
+
+const Trade = lazy(() => import('./pages/Trade.jsx'))
+const Portfolio = lazy(() => import('./pages/Portfolio.jsx'))
+const ActiveTrades = lazy(() => import('./pages/ActiveTrades.jsx'))
+const Analytics = lazy(() => import('./pages/Analytics.jsx'))
+const Transactions = lazy(() => import('./pages/Transactions.jsx'))
+const Watchlist = lazy(() => import('./pages/Watchlist.jsx'))
+const Profile = lazy(() => import('./pages/Profile.jsx'))
+const Security = lazy(() => import('./pages/Security.jsx'))
+const Support = lazy(() => import('./pages/Support.jsx'))
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx'))
+const AdminUsers = lazy(() => import('./pages/admin/Users.jsx'))
+const AdminDeposits = lazy(() => import('./pages/admin/Deposits.jsx'))
+const AdminWithdrawals = lazy(() => import('./pages/admin/Withdrawals.jsx'))
+const AdminTransactions = lazy(() => import('./pages/admin/Transactions.jsx'))
+const AdminTrades = lazy(() => import('./pages/admin/Trades.jsx'))
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <WalletProvider>
-          <Routes>
+          <NetworkStatus />
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
           <Route path="/" element={<Landing />} />
 
           <Route element={<AuthLayout />}>
@@ -77,7 +83,8 @@ function App() {
           </Route>
 
           <Route path="*" element={<NotFound />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </WalletProvider>
       </AuthProvider>
     </BrowserRouter>

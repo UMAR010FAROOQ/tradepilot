@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, BarChart3, ShieldCheck, Sparkles } from 'lucide-react'
+import { Activity, ArrowRight, BarChart3, Globe2, LineChart, ShieldCheck, Sparkles, WalletCards } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import Badge from '../components/common/Badge.jsx'
 import Button from '../components/common/Button.jsx'
@@ -9,6 +9,14 @@ import { marketBySymbol } from '../data/markets.js'
 import { formatPercent, formatPrice } from '../utils/marketFormatters.js'
 
 const previewSymbols = ['BTCUSDT', 'ETHUSDT', 'XAUUSD']
+const features = [
+  [LineChart, 'Live Crypto Market Data', 'Follow public Crypto quotes and market movement from Binance.'],
+  [Globe2, 'Forex & Gold Market Data', 'Track Forex pairs and XAU/USD through the configured market-data proxy.'],
+  [Activity, 'Simulated Trading', 'Practice market orders and manage positions without real-money execution.'],
+  [WalletCards, 'Portfolio Tracking', 'Follow balances, market value, and live simulated profit and loss.'],
+  [BarChart3, 'Analytics', 'Review activity, outcomes, fees, and market-level performance.'],
+  [ShieldCheck, 'Secure Account System', 'Use protected account routes with Firebase authentication and role-based access.'],
+]
 
 function Landing() {
   const navigate = useNavigate()
@@ -32,13 +40,13 @@ function Landing() {
               className="hidden rounded-lg px-3 py-2 text-sm font-medium text-muted transition hover:text-foreground sm:block"
               to="/login"
             >
-              Log in
+              Sign In
             </Link>
             <Link
               className="inline-flex h-9 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-strong"
               to="/signup"
             >
-              Create account
+              Get Started
             </Link>
           </div>
         </nav>
@@ -62,11 +70,11 @@ function Landing() {
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button onClick={() => navigate('/signup')} size="lg">
-                  Start exploring
+                  Get Started
                   <ArrowRight aria-hidden="true" className="size-4" />
                 </Button>
-                <Button onClick={() => navigate('/login')} size="lg" variant="secondary">
-                  View workspace
+                <Button onClick={() => navigate('/markets')} size="lg" variant="secondary">
+                  Explore Markets
                 </Button>
               </div>
               <p className="mt-5 text-xs text-muted">Product preview · No live trading enabled</p>
@@ -105,7 +113,24 @@ function Landing() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <section aria-labelledby="features-title" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">Built for practice</p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl" id="features-title">A complete simulated trading workspace.</h2>
+            <p className="mt-3 text-sm leading-6 text-muted">Explore real public market data with account tools designed for learning and review.</p>
+          </div>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map(([Icon, title, description]) => (
+              <Card key={title}>
+                <span className="grid size-9 place-items-center rounded-lg bg-accent/10 text-accent"><Icon aria-hidden="true" className="size-4" /></span>
+                <h3 className="mt-4 text-sm font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-5 rounded-2xl border border-border bg-surface p-6 sm:flex-row sm:items-center sm:p-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">TradePilot</p>

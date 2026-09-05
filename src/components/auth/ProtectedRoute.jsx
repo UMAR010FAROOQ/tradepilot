@@ -1,6 +1,7 @@
 import { ShieldCheck } from 'lucide-react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
+import AccountRestricted from './AccountRestricted.jsx'
 
 function AuthLoadingScreen() {
   return (
@@ -17,7 +18,7 @@ function AuthLoadingScreen() {
 }
 
 function ProtectedRoute() {
-  const { currentUser, loading } = useAuth()
+  const { currentUser, userProfile, loading } = useAuth()
   const location = useLocation()
 
   if (loading) return <AuthLoadingScreen />
@@ -25,6 +26,7 @@ function ProtectedRoute() {
   if (!currentUser) {
     return <Navigate replace state={{ from: location }} to="/login" />
   }
+  if (userProfile?.accountStatus && userProfile.accountStatus !== 'active') return <AccountRestricted status={userProfile.accountStatus} />
 
   return <Outlet />
 }

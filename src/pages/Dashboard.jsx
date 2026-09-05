@@ -34,6 +34,7 @@ function Dashboard() {
   const [positionTickers, setPositionTickers] = useState(new Map())
   const [positionsLoading, setPositionsLoading] = useState(true)
   const [recentTrades, setRecentTrades] = useState([])
+  const [tradesLoading, setTradesLoading] = useState(true)
   const navigate = useNavigate()
   const firstName = (userProfile?.fullName || currentUser?.displayName || '').trim().split(/\s+/)[0]
   const currency = wallet?.currency || 'USD'
@@ -85,7 +86,7 @@ function Dashboard() {
   }, [])
 
   useEffect(() => subscribeToPositions(currentUser.uid, (items) => { setPositions(items); setPositionsLoading(false) }, () => setPositionsLoading(false)), [currentUser.uid])
-  useEffect(() => subscribeToTrades(currentUser.uid, (items) => setRecentTrades(items.slice(0, 5)), () => {}), [currentUser.uid])
+  useEffect(() => subscribeToTrades(currentUser.uid, (items) => { setRecentTrades(items.slice(0, 5)); setTradesLoading(false) }, () => setTradesLoading(false)), [currentUser.uid])
 
   useEffect(() => {
     const unsubscribe = positionSymbols.map((symbol) => subscribeToTicker(symbol, (ticker) => setPositionTickers((current) => new Map(current).set(symbol, ticker))))
@@ -184,12 +185,12 @@ function Dashboard() {
                 {accountLoading ? <span className="block h-8 w-40 animate-pulse rounded bg-elevated" /> : <p className="financial-value text-2xl font-semibold">{formatCurrency(accountEquity, currency)}</p>}
                 {!accountLoading && <p className={`financial-value mt-1 text-xs ${unrealizedPnl >= 0 ? 'text-positive' : 'text-negative'}`}>{formatCurrency(unrealizedPnl, currency)} unrealized P/L</p>}
               </div>
-              <Badge variant={unrealizedPnl >= 0 ? 'positive' : 'negative'}>
+              {!accountLoading && <Badge variant={unrealizedPnl >= 0 ? 'positive' : 'negative'}>
                 <ArrowUpRight aria-hidden="true" className="mr-1 size-3" />
                 {openPositions.length} open
-              </Badge>
+              </Badge>}
             </div>
-            <div className="mt-7 rounded-lg border border-border/70 bg-elevated/50 p-5"><div className="flex h-3 overflow-hidden rounded-full bg-surface" role="img" aria-label="Current equity composition"><span className="bg-accent" style={{ width: `${accountEquity > 0 ? (wallet?.availableBalance || 0) / accountEquity * 100 : 0}%` }} /><span className="bg-positive" style={{ width: `${accountEquity > 0 ? openPositionsValue / accountEquity * 100 : 0}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-2"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-muted"><span className="size-2 rounded-full bg-accent" />Available cash</span><span className="financial-value">{formatCurrency(wallet?.availableBalance || 0, currency)}</span></div><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-muted"><span className="size-2 rounded-full bg-positive" />Open positions</span><span className="financial-value">{formatCurrency(openPositionsValue, currency)}</span></div></div></div>
+            {accountLoading ? <div className="mt-7 h-24 animate-pulse rounded-lg bg-elevated" role="status" /> : <div className="mt-7 rounded-lg border border-border/70 bg-elevated/50 p-5"><div className="flex h-3 overflow-hidden rounded-full bg-surface" role="img" aria-label="Current equity composition"><span className="bg-accent" style={{ width: `${accountEquity > 0 ? (wallet?.availableBalance || 0) / accountEquity * 100 : 0}%` }} /><span className="bg-positive" style={{ width: `${accountEquity > 0 ? openPositionsValue / accountEquity * 100 : 0}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-2"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-muted"><span className="size-2 rounded-full bg-accent" />Available cash</span><span className="financial-value">{formatCurrency(wallet?.availableBalance || 0, currency)}</span></div><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-muted"><span className="size-2 rounded-full bg-positive" />Open positions</span><span className="financial-value">{formatCurrency(openPositionsValue, currency)}</span></div></div></div>}
           </div>
         </Card>
 
@@ -229,7 +230,7 @@ function Dashboard() {
           <Button onClick={() => navigate('/transactions')} size="sm" variant="ghost">All transactions</Button>
         </div>
         <div className="divide-y divide-border">
-          {recentTrades.length === 0 ? <div className="px-5 py-8 text-center text-sm text-muted">No simulated trades yet.</div> : recentTrades.map((trade) => (
+          {tradesLoading ? <div className="grid gap-3 p-5" role="status">{[1, 2, 3].map((item) => <span className="h-12 animate-pulse rounded-lg bg-elevated" key={item} />)}</div> : recentTrades.length === 0 ? <div className="px-5 py-8 text-center text-sm text-muted">No simulated trades yet.</div> : recentTrades.map((trade) => (
             <div className="flex items-center justify-between gap-4 px-5 py-4" key={trade.id}>
               <div className="flex min-w-0 items-center gap-3">
                 <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${trade.side === 'BUY' ? 'bg-positive/10 text-positive' : 'bg-negative/10 text-negative'}`}>
