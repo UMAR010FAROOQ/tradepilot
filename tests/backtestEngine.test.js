@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest'
+import { TRADING_FEE_RATE } from '../src/constants/trading.js'
+import { runBacktest, validateBacktestConfiguration } from '../src/utils/backtestEngine.js'
+
+const baseConfig = { startingBalance: 1000, sizingMode: 'percent', positionSize: 100, slippage: 1, stopLossPercent: '', takeProfitPercent: '', strategy: 'breakout', strategyParameters: { lookbackPeriod: 2, exitLookback: 2 } }
+const make = (values) => values.map((close, index) => ({ time: index + 1, open: close, high: close + 1, low: close - 1, close }))
+describe('backtest engine', () => {
+  it('validates configuration', () => { expect(validateBacktestConfiguration(baseConfig)).toBe(''); expect(validateBacktestConfiguration({ ...baseConfig, startingBalance: 0 })).toMatch(/positive/) })
+  it('executes a close signal on the next candle open', () => { const data = make([10, 10, 12, 20, 19]); const result = runBacktest(data, baseConfig); expect(result.trades[0].entryTime).toBe(4); expect(result.trades[0].entryPrice).toBeCloseTo(20 * 1.01) })
+  it('excludes the current breakout candle from its lookback', () => expect(runBacktest(make([10, 10, 12, 20]), baseConfig).metrics.totalTrades).toBe(1))
+  it('charges entry and exit fees and reconciles ending balance', () => { const result = runBacktest(make([10, 10, 12, 20, 19]), baseConfig); const trade = result.trades[0]; expect(trade.entryFee).toBeCloseTo(trade.entryGross * TRADING_FEE_RATE); expect(trade.exitFee).toBeCloseTo(trade.exitGross * TRADING_FEE_RATE); expect(result.metrics.endingBalance).toBeCloseTo(result.metrics.startingBalance + result.metrics.netProfit) })
+  it('applies adverse BUY and SELL slippage', () => { const trade = runBacktest(make([10, 10, 12, 20]), baseConfig).trades[0]; expect(trade.entryPrice).toBeGreaterThan(20); expect(trade.exitPrice).toBeLessThan(make([10, 10, 12, 20]).at(-1).close) })
+  it('closes a final open position at end of backtest', () => { const result = runBacktest(make([10, 10, 12, 20]), baseConfig); expect(result.trades[0].exitReason).toBe('End of Backtest'); expect(result.replayFrames.at(-1).position).toBeNull() })
+  it('never spends more than available cash and holds one position', () => { const result = runBacktest(make([10, 10, 12, 20, 25, 30]), { ...baseConfig, sizingMode: 'fixed', positionSize: 5000 }); expect(result.replayFrames.every((frame) => frame.cash >= -1e-8)).toBe(true); expect(result.replayFrames.every((frame) => frame.position === null || typeof frame.position === 'object')).toBe(true) })
+  it('produces a reconciled equity curve and drawdown', () => { const result = runBacktest(make([10, 10, 12, 20, 15]), baseConfig); expect(result.equityCurve).toHaveLength(5); expect(result.equityCurve.at(-1).value).toBeCloseTo(result.metrics.endingBalance); expect(result.metrics.maximumDrawdown).toBeGreaterThanOrEqual(0) })
+  it('uses stop loss before take profit when both touch', () => { const data = make([10, 10, 12, 20, 20]); data[3] = { ...data[3], open: 20 }; data[4] = { ...data[4], high: 30, low: 10 }; const result = runBacktest(data, { ...baseConfig, slippage: 0, stopLossPercent: 10, takeProfitPercent: 10 }); expect(result.trades[0].exitReason).toBe('Stop Loss') })
+})

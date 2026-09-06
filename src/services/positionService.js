@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { TRADING_FEE_RATE } from '../constants/trading.js'
+import { calculateBreakEvenPrice } from '../utils/tradingMath.js'
 import { db } from './firebase.js'
 import { createServiceError } from '../utils/firestoreErrors.js'
 
@@ -63,7 +64,7 @@ export async function setBreakEvenStop({ userId, symbol, currentPrice }) {
   const positionRef = doc(db, 'positions', positionIdFor(userId, symbol))
   const snapshot = await getDoc(positionRef)
   if (!snapshot.exists() || snapshot.data().userId !== userId || snapshot.data().status !== 'open') throw createServiceError('trading/position-missing', 'The position is no longer open.')
-  const breakEvenPrice = snapshot.data().averageEntryPrice * (1 + TRADING_FEE_RATE) / (1 - TRADING_FEE_RATE)
+  const breakEvenPrice = calculateBreakEvenPrice(snapshot.data().averageEntryPrice, TRADING_FEE_RATE)
   if (!Number.isFinite(currentPrice) || currentPrice <= breakEvenPrice) throw createServiceError('trading/break-even-unavailable', 'The current price must be above break even.')
   await updateDoc(positionRef, { stopLoss: breakEvenPrice, updatedAt: serverTimestamp() })
   return breakEvenPrice

@@ -6,6 +6,7 @@ import { auth, db } from './firebase.js'
 import { positionIdFor } from './positionService.js'
 import { enforceBuyRisk } from './riskService.js'
 import { requirePlatformFeature } from './platformSettingsService.js'
+import { calculateBuyQuote, calculateRealizedPnl, calculateSellQuote, weightedAverageEntry } from '../utils/tradingMath.js'
 
 const MONEY_SCALE = 100000000
 const roundMoney = (value) => Math.round(value * MONEY_SCALE) / MONEY_SCALE
@@ -32,8 +33,7 @@ async function executeBuyTransaction(input, orderId = null) {
   await requirePlatformFeature('allowTrading', 'Opening new buy exposure is temporarily disabled.')
   const { market, quantity, executionPrice, grossAmount } = validateRequest(input)
   await enforceBuyRisk({ userId: input.userId, symbol: input.symbol, quantity, entryPrice: executionPrice, stopLoss: input.stopLoss ?? null })
-  const fee = roundMoney(grossAmount * TRADING_FEE_RATE)
-  const netAmount = roundMoney(grossAmount + fee)
+  const { fee, totalCost: netAmount } = calculateBuyQuote(quantity, executionPrice, TRADING_FEE_RATE)
   const walletRef = doc(db, 'wallets', input.userId)
   const positionRef = doc(db, 'positions', positionIdFor(input.userId, input.symbol))
   const tradeRef = doc(collection(db, 'trades'))
@@ -55,7 +55,7 @@ async function executeBuyTransaction(input, orderId = null) {
     const oldQuantity = current?.quantity || 0
     const oldAverage = current?.averageEntryPrice || 0
     const newQuantity = roundQuantity(oldQuantity + quantity)
-    const averageEntryPrice = roundMoney(((oldQuantity * oldAverage) + (quantity * executionPrice)) / newQuantity)
+    const averageEntryPrice = weightedAverageEntry(oldQuantity, oldAverage, quantity, executionPrice)
     const position = {
       userId: input.userId,
       symbol: input.symbol,
@@ -107,8 +107,7 @@ export async function executeSell(input) {
 
 async function executeSellTransaction(input, orderId = null, automation = null) {
   const { market, quantity, executionPrice, grossAmount } = validateRequest(input)
-  const fee = roundMoney(grossAmount * TRADING_FEE_RATE)
-  const netAmount = roundMoney(grossAmount - fee)
+  const { fee, netProceeds: netAmount } = calculateSellQuote(quantity, executionPrice, TRADING_FEE_RATE)
   const walletRef = doc(db, 'wallets', input.userId)
   const positionRef = doc(db, 'positions', positionIdFor(input.userId, input.symbol))
   const tradeRef = doc(collection(db, 'trades'))
@@ -129,7 +128,7 @@ async function executeSellTransaction(input, orderId = null, automation = null) 
     if (quantity > current.quantity) throw createServiceError('trading/quantity-exceeded', 'Sell quantity exceeds your position.')
 
     const remainingQuantity = roundQuantity(current.quantity - quantity)
-    const realizedPnl = roundMoney((executionPrice - current.averageEntryPrice) * quantity - fee)
+    const realizedPnl = calculateRealizedPnl(quantity, current.averageEntryPrice, executionPrice, fee)
     transaction.update(walletRef, { availableBalance: roundMoney(wallet.availableBalance + netAmount), updatedAt: serverTimestamp(), lastTradeId: tradeRef.id })
     const takeProfitTargets = automation?.type === 'takeProfit'
       ? current.takeProfitTargets.map((target) => target.id === automation.targetId ? { ...target, status: 'triggered' } : target)
