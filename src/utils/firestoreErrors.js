@@ -17,11 +17,15 @@ const firestoreErrorMessages = {
   'admin/unauthorized': 'Administrator access is required for this action.',
   'admin/invalid-role': 'Choose either the User or Admin role.',
   'admin/self-role-change': 'You cannot change your own role.',
+  'admin/invalid-status': 'Choose either active or suspended status.',
+  'admin/self-status-change': 'You cannot suspend your own account.',
   'admin/user-missing': 'The selected user no longer exists.',
   'admin/request-missing': 'This request no longer exists.',
   'admin/request-processed': 'This request has already been processed.',
   'admin/wallet-missing': 'The user wallet could not be found.',
   'admin/insufficient-balance': 'The wallet no longer has enough available balance.',
+  'validation/missing-note': 'Enter an administrative note.',
+  'platform/feature-disabled': 'This feature is temporarily disabled by an administrator.',
   'trading/insufficient-balance': 'Insufficient balance.',
   'trading/position-missing': 'No open position is available to sell.',
   'trading/quantity-exceeded': 'Sell quantity exceeds your position.',
@@ -56,7 +60,7 @@ const firestoreErrorMessages = {
 }
 
 export function getFirestoreErrorMessage(error) {
-  if (error?.code === 'risk/blocked' || error?.code === 'risk/invalid-settings') return error.message
+  if (error?.code === 'risk/blocked' || error?.code === 'risk/invalid-settings' || error?.code === 'platform/feature-disabled') return error.message
   return (
     firestoreErrorMessages[error?.code] ||
     'Unable to complete the request right now. Please try again.'

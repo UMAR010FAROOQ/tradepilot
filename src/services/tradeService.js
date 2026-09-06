@@ -5,6 +5,7 @@ import { createServiceError } from '../utils/firestoreErrors.js'
 import { auth, db } from './firebase.js'
 import { positionIdFor } from './positionService.js'
 import { enforceBuyRisk } from './riskService.js'
+import { requirePlatformFeature } from './platformSettingsService.js'
 
 const MONEY_SCALE = 100000000
 const roundMoney = (value) => Math.round(value * MONEY_SCALE) / MONEY_SCALE
@@ -28,6 +29,7 @@ export async function executeBuy(input) {
 }
 
 async function executeBuyTransaction(input, orderId = null) {
+  await requirePlatformFeature('allowTrading', 'Opening new buy exposure is temporarily disabled.')
   const { market, quantity, executionPrice, grossAmount } = validateRequest(input)
   await enforceBuyRisk({ userId: input.userId, symbol: input.symbol, quantity, entryPrice: executionPrice, stopLoss: input.stopLoss ?? null })
   const fee = roundMoney(grossAmount * TRADING_FEE_RATE)

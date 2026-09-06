@@ -10,7 +10,7 @@ export function formatAdminDate(timestamp) {
 
 export function statusVariant(status) {
   if (status === 'approved' || status === 'completed' || status === 'active') return 'positive'
-  if (status === 'rejected' || status === 'disabled') return 'negative'
+  if (status === 'rejected' || status === 'disabled' || status === 'suspended') return 'negative'
   if (status === 'pending') return 'warning'
   return 'neutral'
 }

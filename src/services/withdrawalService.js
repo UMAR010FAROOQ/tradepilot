@@ -2,8 +2,9 @@ import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where 
 import { db } from './firebase.js'
 import { createServiceError } from '../utils/firestoreErrors.js'
 import { isBankMethod, paymentMethodByValue } from '../data/paymentMethods.js'
+import { requirePlatformFeature } from './platformSettingsService.js'
 
-export function createWithdrawalRequest({ userId, amount, method, accountHolderName, destinationAccount, bankName, notes = '' }) {
+export async function createWithdrawalRequest({ userId, amount, method, accountHolderName, destinationAccount, bankName, notes = '' }) {
   const numericAmount = Number(amount)
 
   if (!userId) throw createServiceError('permission-denied', 'A signed-in user is required.')
@@ -35,6 +36,7 @@ export function createWithdrawalRequest({ userId, amount, method, accountHolderN
     updatedAt: serverTimestamp(),
   }
   if (isBankMethod(method)) request.bankName = bankName.trim()
+  await requirePlatformFeature('allowWithdrawals', 'New withdrawal requests are temporarily disabled.')
   return addDoc(collection(db, 'withdrawals'), request)
 }
 

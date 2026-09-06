@@ -1,71 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LoaderCircle, UserCog } from 'lucide-react'
+import { Download, Eye, LoaderCircle, ShieldAlert, UserCog } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import Badge from '../../components/common/Badge.jsx'
 import Button from '../../components/common/Button.jsx'
 import Card from '../../components/common/Card.jsx'
 import Modal from '../../components/common/Modal.jsx'
 import PageHeader from '../../components/common/PageHeader.jsx'
 import SearchInput from '../../components/common/SearchInput.jsx'
+import Select from '../../components/common/Select.jsx'
 import { AdminEmpty, AdminError, AdminLoading } from '../../components/admin/AdminState.jsx'
 import useAuth from '../../hooks/useAuth.js'
-import { getUsers, updateUserRole } from '../../services/adminService.js'
-import { getFirestoreErrorMessage } from '../../utils/firestoreErrors.js'
-import { formatCurrency } from '../../utils/formatCurrency.js'
+import { getUsers, updateUserRole, updateUserStatus } from '../../services/adminService.js'
 import { formatAdminDate, statusVariant } from '../../utils/adminFormatters.js'
+import { downloadCsv } from '../../utils/csv.js'
+import { formatCurrency } from '../../utils/formatCurrency.js'
+import { getFirestoreErrorMessage } from '../../utils/firestoreErrors.js'
 
-function Users() {
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [search, setSearch] = useState('')
-  const [roleTarget, setRoleTarget] = useState(null)
-  const [updatingRole, setUpdatingRole] = useState(false)
+export default function Users() {
+  const [users, setUsers] = useState([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [message, setMessage] = useState(''), [search, setSearch] = useState(''), [role, setRole] = useState('all'), [status, setStatus] = useState('all'), [sort, setSort] = useState('newest'), [dialog, setDialog] = useState(null), [busy, setBusy] = useState(false)
   const { currentUser } = useAuth()
-  useEffect(() => { getUsers().then(setUsers).catch((requestError) => setError(getFirestoreErrorMessage(requestError))).finally(() => setLoading(false)) }, [])
-  const visible = useMemo(() => users.filter((user) => `${user.fullName} ${user.email} ${user.uid}`.toLowerCase().includes(search.toLowerCase())), [users, search])
-  const nextRole = roleTarget?.role === 'admin' ? 'user' : 'admin'
-
-  const confirmRoleChange = async () => {
-    if (!roleTarget) return
-    setUpdatingRole(true)
-    setError('')
-    setSuccess('')
-    try {
-      await updateUserRole(roleTarget.uid, nextRole)
-      setUsers((items) => items.map((user) => user.uid === roleTarget.uid ? { ...user, role: nextRole } : user))
-      setSuccess(`${roleTarget.fullName || roleTarget.email || 'User'} is now ${nextRole === 'admin' ? 'an Admin' : 'a User'}.`)
-      setRoleTarget(null)
-    } catch (requestError) {
-      setError(getFirestoreErrorMessage(requestError))
-    } finally {
-      setUpdatingRole(false)
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <PageHeader description="Review account profiles, wallet balances, role access, and read-only risk posture." eyebrow="Administration" title="Users" />
-      <AdminError message={error} />
-      {success && <div className="rounded-lg border border-positive/25 bg-positive/10 px-4 py-3 text-sm text-positive" role="status">{success}</div>}
-      <Card padding="none">
-        <div className="border-b border-border p-4"><SearchInput aria-label="Search users" className="max-w-md" onChange={(event) => setSearch(event.target.value)} placeholder="Search name, email or user ID" value={search} /></div>
-        {loading ? <AdminLoading /> : visible.length === 0 ? <AdminEmpty title="No users found" /> : <div className="overflow-x-auto"><table className="w-full min-w-[1320px] text-left">
-          <thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-[0.14em] text-muted"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">UID</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Available</th><th className="px-5 py-3">Risk protection</th><th className="px-5 py-3">Open positions</th><th className="px-5 py-3">Exposure</th><th className="px-5 py-3">Today P/L (UTC)</th><th className="px-5 py-3">Created</th><th className="px-5 py-3 text-right">Role action</th></tr></thead>
-          <tbody className="divide-y divide-border">{visible.map((user) => { const isCurrentAdmin = user.uid === currentUser.uid; return <tr key={user.uid}><td className="px-5 py-4"><p className="text-sm font-medium">{user.fullName || 'Unnamed user'}</p><p className="mt-0.5 text-xs text-muted">{user.email}</p></td><td className="px-5 py-4 font-mono text-[10px] text-muted">{user.uid}</td><td className="px-5 py-4"><Badge variant={user.role === 'admin' ? 'warning' : 'neutral'}>{user.role === 'admin' ? 'Admin' : 'User'}</Badge></td><td className="px-5 py-4"><Badge variant={statusVariant(user.accountStatus)}>{user.accountStatus}</Badge></td><td className="financial-value px-5 py-4 text-sm">{user.wallet ? formatCurrency(user.wallet.availableBalance, user.wallet.currency) : '—'}</td><td className="px-5 py-4"><Badge variant={user.risk?.riskProtectionEnabled ? 'positive' : 'warning'}>{user.risk?.riskProtectionEnabled ? 'Active' : 'Off'}</Badge></td><td className="financial-value px-5 py-4 text-sm">{user.risk?.openPositions || 0}</td><td className="financial-value px-5 py-4 text-sm">{formatCurrency(user.risk?.exposure || 0)}</td><td className={`financial-value px-5 py-4 text-sm ${(user.risk?.todayRealizedPnl || 0) >= 0 ? 'text-positive' : 'text-negative'}`}>{formatCurrency(user.risk?.todayRealizedPnl || 0)}</td><td className="px-5 py-4 text-xs text-muted">{formatAdminDate(user.createdAt)}</td><td className="px-5 py-4 text-right">{isCurrentAdmin ? <span className="text-xs text-muted">You cannot change your own role.</span> : <Button onClick={() => { setError(''); setSuccess(''); setRoleTarget(user) }} size="sm" variant="secondary"><UserCog aria-hidden="true" className="size-4" />Change role</Button>}</td></tr> })}</tbody>
-        </table></div>}
-      </Card>
-      <Modal
-        description={roleTarget ? `Change this account from ${roleTarget.role === 'admin' ? 'Admin' : 'User'} to ${nextRole === 'admin' ? 'Admin' : 'User'}?` : ''}
-        footer={<><Button disabled={updatingRole} onClick={() => setRoleTarget(null)} variant="ghost">Cancel</Button><Button disabled={updatingRole} onClick={confirmRoleChange} variant={nextRole === 'admin' ? 'primary' : 'danger'}>{updatingRole && <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />}{updatingRole ? 'Changing role…' : `Change to ${nextRole === 'admin' ? 'Admin' : 'User'}`}</Button></>}
-        isOpen={Boolean(roleTarget)}
-        onClose={() => { if (!updatingRole) setRoleTarget(null) }}
-        title="Confirm role change"
-      >
-        <p className="text-sm leading-6 text-muted">This change takes effect through the user’s live profile. Promoted users gain administrator access; demoted users lose it.</p>
-      </Modal>
-    </div>
-  )
+  useEffect(() => { getUsers().then(setUsers).catch((e) => setError(getFirestoreErrorMessage(e))).finally(() => setLoading(false)) }, [])
+  const visible = useMemo(() => users.filter((user) => (role === 'all' || user.role === role) && (status === 'all' || user.accountStatus === status) && `${user.fullName} ${user.email} ${user.uid}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => { if (sort === 'name') return (a.fullName || '').localeCompare(b.fullName || ''); const delta = (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0); return sort === 'oldest' ? -delta : delta }), [users, role, status, search, sort])
+  const act = async () => { setBusy(true); setError(''); setMessage(''); try { if (dialog.type === 'role') await updateUserRole(dialog.user.uid, dialog.value); else await updateUserStatus(dialog.user.uid, dialog.value); setUsers((items) => items.map((item) => item.uid === dialog.user.uid ? { ...item, [dialog.type === 'role' ? 'role' : 'accountStatus']: dialog.value } : item)); setMessage('User account updated successfully.'); setDialog(null) } catch (e) { setError(getFirestoreErrorMessage(e)) } finally { setBusy(false) } }
+  const exportRows = () => downloadCsv(`tradepilot-users-${new Date().toISOString().slice(0, 10)}.csv`, ['Name', 'Email', 'Role', 'Status', 'Created'], visible.map((user) => [user.fullName || '', user.email || '', user.role, user.accountStatus, user.createdAt?.toDate?.()?.toISOString?.() || '']))
+  return <div className="space-y-6"><PageHeader eyebrow="Administration" title="Users" description="Review accounts and safely manage role and access status." actions={<Button disabled={!visible.length} onClick={exportRows} variant="secondary"><Download className="size-4" />Export CSV</Button>} /><AdminError message={error} />{message && <div className="rounded-lg border border-positive/25 bg-positive/10 px-4 py-3 text-sm text-positive">{message}</div>}<Card padding="none"><div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 xl:grid-cols-[1fr_150px_160px_160px]"><SearchInput aria-label="Search users" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email or user ID" /><Select aria-label="Filter role" value={role} onChange={(e) => setRole(e.target.value)}><option value="all">All roles</option><option value="user">Users</option><option value="admin">Admins</option></Select><Select aria-label="Filter status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></Select><Select aria-label="Sort users" value={sort} onChange={(e) => setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></Select></div>{loading ? <AdminLoading /> : !visible.length ? <AdminEmpty title="No users found" /> : <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left"><thead className="border-b border-border bg-elevated/40 text-[10px] uppercase tracking-wider text-muted"><tr>{['User', 'Role', 'Status', 'Joined', 'Wallet', 'Open Positions', 'Trades', 'Actions'].map((heading) => <th className="px-5 py-3" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-border">{visible.map((user) => { const self = user.uid === currentUser.uid; return <tr key={user.uid}><td className="px-5 py-4"><p className="text-sm font-semibold">{user.fullName || 'Unnamed user'}</p><p className="mt-1 text-xs text-muted">{user.email}</p></td><td className="px-5 py-4"><Badge variant={user.role === 'admin' ? 'warning' : 'neutral'}>{user.role}</Badge></td><td className="px-5 py-4"><Badge variant={statusVariant(user.accountStatus)}>{user.accountStatus}</Badge></td><td className="px-5 py-4 text-xs text-muted">{formatAdminDate(user.createdAt)}</td><td className="financial-value px-5 py-4 text-sm">{formatCurrency(user.wallet?.availableBalance || 0)}</td><td className="financial-value px-5 py-4 text-sm">{user.risk?.openPositions || 0}</td><td className="financial-value px-5 py-4 text-sm">{user.risk?.tradeCount || 0}</td><td className="px-5 py-4"><div className="flex items-center gap-2"><Link to={`/admin/users/${user.uid}`}><Button size="sm" variant="ghost"><Eye className="size-4" />View</Button></Link>{!self && <><Button onClick={() => setDialog({ type: 'role', value: user.role === 'admin' ? 'user' : 'admin', user })} size="sm" variant="secondary"><UserCog className="size-4" />Role</Button><Button onClick={() => setDialog({ type: 'status', value: user.accountStatus === 'suspended' ? 'active' : 'suspended', user })} size="sm" variant={user.accountStatus === 'suspended' ? 'success' : 'danger'}><ShieldAlert className="size-4" />{user.accountStatus === 'suspended' ? 'Activate' : 'Suspend'}</Button></>}</div></td></tr> })}</tbody></table></div>}</Card><Modal isOpen={Boolean(dialog)} onClose={() => !busy && setDialog(null)} title={dialog?.type === 'role' ? 'Confirm role change' : 'Confirm account status'} description={dialog ? `${dialog.user.fullName || dialog.user.email}: ${dialog.value}` : ''} footer={<><Button disabled={busy} onClick={() => setDialog(null)} variant="ghost">Cancel</Button><Button disabled={busy} onClick={act} variant={dialog?.value === 'active' ? 'success' : 'danger'}>{busy && <LoaderCircle className="size-4 animate-spin" />}Confirm</Button></>}><p className="text-sm leading-6 text-muted">This change takes effect immediately through the user’s live profile and will be recorded in the audit log.</p></Modal></div>
 }
-
-export default Users

@@ -7,6 +7,7 @@ const titles = {
   '/admin': 'Overview', '/admin/users': 'Users', '/admin/deposits': 'Deposits',
   '/admin/withdrawals': 'Withdrawals', '/admin/transactions': 'Transactions',
   '/admin/trades': 'Trades',
+  '/admin/audit-logs': 'Audit Logs', '/admin/settings': 'Platform Settings',
 }
 
 function AdminNavbar({ onMenuClick }) {
@@ -19,7 +20,7 @@ function AdminNavbar({ onMenuClick }) {
       <IconButton aria-label="Open admin navigation" className="mr-3 md:hidden" icon={Menu} iconSize="lg" onClick={onMenuClick} size="lg" variant="prominent" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Admin console</p>
-        <p className="truncate text-base font-semibold">{titles[pathname] || 'Administration'}</p>
+        <p className="truncate text-base font-semibold">{titles[pathname] || (pathname.startsWith('/admin/users/') ? 'User Details' : 'Administration')}</p>
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         <span className="hidden items-center gap-2 rounded-full border border-positive/20 bg-positive/10 px-3 py-1.5 text-xs font-medium text-positive sm:flex"><ShieldCheck className="size-3.5" /> Admin session</span>

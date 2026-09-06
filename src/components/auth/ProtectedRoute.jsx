@@ -3,6 +3,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import AccountRestricted from './AccountRestricted.jsx'
 import { needsEmailVerification } from '../../utils/emailVerification.js'
+import usePlatformSettings from '../../hooks/usePlatformSettings.js'
+import MaintenanceScreen from './MaintenanceScreen.jsx'
 
 function AuthLoadingScreen() {
   return (
@@ -21,8 +23,9 @@ function AuthLoadingScreen() {
 function ProtectedRoute() {
   const { currentUser, userProfile, loading } = useAuth()
   const location = useLocation()
+  const { settings, loading: settingsLoading } = usePlatformSettings()
 
-  if (loading) return <AuthLoadingScreen />
+  if (loading || settingsLoading) return <AuthLoadingScreen />
 
   if (!currentUser) {
     return <Navigate replace state={{ from: location }} to="/login" />
@@ -31,6 +34,7 @@ function ProtectedRoute() {
     return <Navigate replace state={{ email: currentUser.email || '', from: location }} to="/verify-email" />
   }
   if (userProfile?.accountStatus && userProfile.accountStatus !== 'active') return <AccountRestricted status={userProfile.accountStatus} />
+  if (settings.maintenanceMode && userProfile?.role !== 'admin') return <MaintenanceScreen />
 
   return <Outlet />
 }

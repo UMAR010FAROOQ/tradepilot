@@ -12,8 +12,10 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { auth, db } from './firebase.js'
+import { requirePlatformFeature } from './platformSettingsService.js'
 
-export function signup(email, password) {
+export async function signup(email, password) {
+  await requirePlatformFeature('allowSignup', 'New account registration is temporarily disabled.')
   return createUserWithEmailAndPassword(auth, email, password)
 }
 

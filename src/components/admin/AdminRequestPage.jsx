@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, RefreshCw, X } from 'lucide-react'
+import { Check, Download, RefreshCw, X } from 'lucide-react'
 import Badge from '../common/Badge.jsx'
 import Button from '../common/Button.jsx'
 import Card from '../common/Card.jsx'
@@ -13,6 +13,7 @@ import { getFirestoreErrorMessage } from '../../utils/firestoreErrors.js'
 import { formatCurrency } from '../../utils/formatCurrency.js'
 import { formatAdminDate, statusVariant } from '../../utils/adminFormatters.js'
 import { requestAccount } from '../../utils/paymentDetails.js'
+import { downloadCsv } from '../../utils/csv.js'
 
 function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest }) {
   const [items, setItems] = useState([])
@@ -20,6 +21,9 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
+  const [method, setMethod] = useState('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [dialog, setDialog] = useState(null)
   const [reason, setReason] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -42,8 +46,9 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
 
   const visible = useMemo(() => items.filter((item) => {
     const text = `${item.userId} ${item.reference || ''} ${requestAccount(item)} ${item.method || ''} ${item.accountHolderName || ''} ${item.bankName || ''}`.toLowerCase()
-    return (status === 'all' || item.status === status) && text.includes(search.toLowerCase())
-  }), [items, search, status])
+    const date = item.createdAt?.toDate?.()
+    return (status === 'all' || item.status === status) && (method === 'all' || item.method === method) && text.includes(search.toLowerCase()) && (!fromDate || date >= new Date(`${fromDate}T00:00:00`)) && (!toDate || date <= new Date(`${toDate}T23:59:59`))
+  }), [items, search, status, method, fromDate, toDate])
 
   const act = async () => {
     setProcessing(true)
@@ -62,19 +67,22 @@ function AdminRequestPage({ type, loadRequests, approveRequest, rejectRequest })
   return (
     <div className="space-y-6">
       <PageHeader
-        actions={<Button onClick={load} variant="secondary"><RefreshCw className="size-4" />Refresh</Button>}
+        actions={<div className="flex gap-2"><Button disabled={!visible.length} onClick={() => downloadCsv(`tradepilot-${type}s-${new Date().toISOString().slice(0, 10)}.csv`, type === 'deposit' ? ['Amount', 'Method', 'Reference', 'Status', 'Created'] : ['Amount', 'Method', 'Masked destination', 'Status', 'Created'], visible.map((item) => [item.amount, item.method, type === 'deposit' ? item.reference : requestAccount(item) ? `••••${requestAccount(item).replace(/\s/g, '').slice(-4)}` : '', item.status, item.createdAt?.toDate?.()?.toISOString?.() || '']))} variant="secondary"><Download className="size-4" />Export CSV</Button><Button onClick={load} variant="secondary"><RefreshCw className="size-4" />Refresh</Button></div>}
         description={`Review and process ${type} requests. Approvals update the wallet and audit record atomically.`}
         eyebrow="Operations"
         title={plural}
       />
       <AdminError message={error} />
       <Card padding="none">
-        <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-[1fr_180px]">
+        <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 xl:grid-cols-[1fr_180px_180px_160px_160px]">
           <SearchInput aria-label={`Search ${plural.toLowerCase()}`} onChange={(event) => setSearch(event.target.value)} placeholder="Search method, reference or destination" value={search} />
           <Select aria-label="Filter status" onChange={(event) => setStatus(event.target.value)} value={status}>
             <option value="all">All statuses</option><option value="pending">Pending</option>
             <option value="approved">Approved</option><option value="rejected">Rejected</option>
           </Select>
+          <Select aria-label="Filter payment method" onChange={(event) => setMethod(event.target.value)} value={method}><option value="all">All methods</option>{[...new Set(items.map((item) => item.method).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</Select>
+          <Input aria-label="From date" onChange={(event) => setFromDate(event.target.value)} type="date" value={fromDate} />
+          <Input aria-label="To date" onChange={(event) => setToDate(event.target.value)} type="date" value={toDate} />
         </div>
         {loading ? <AdminLoading /> : visible.length === 0 ? <AdminEmpty title={`No ${plural.toLowerCase()} found`} /> : (
           <div className="overflow-x-auto">

@@ -1,4 +1,4 @@
-import { BanknoteArrowDown, BanknoteArrowUp, CandlestickChart, LayoutDashboard, LogOut, ReceiptText, Users, X } from 'lucide-react'
+import { BanknoteArrowDown, BanknoteArrowUp, CandlestickChart, FileClock, LayoutDashboard, LogOut, ReceiptText, Settings2, Users, X } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
 import IconButton from '../common/IconButton.jsx'
@@ -11,6 +11,8 @@ const links = [
   { to: '/admin/withdrawals', label: 'Withdrawals', icon: BanknoteArrowUp },
   { to: '/admin/trades', label: 'Trades', icon: CandlestickChart },
   { to: '/admin/transactions', label: 'Transactions', icon: ReceiptText },
+  { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileClock },
+  { to: '/admin/settings', label: 'Platform Settings', icon: Settings2 },
 ]
 
 function AdminSidebar({ className, mobile = false, onClose }) {

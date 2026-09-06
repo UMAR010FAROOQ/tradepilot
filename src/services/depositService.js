@@ -2,8 +2,9 @@ import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where 
 import { db } from './firebase.js'
 import { createServiceError } from '../utils/firestoreErrors.js'
 import { isBankMethod, paymentMethodByValue } from '../data/paymentMethods.js'
+import { requirePlatformFeature } from './platformSettingsService.js'
 
-export function createDepositRequest({ userId, amount, method, accountHolderName, senderAccount, bankName, reference, notes = '' }) {
+export async function createDepositRequest({ userId, amount, method, accountHolderName, senderAccount, bankName, reference, notes = '' }) {
   const numericAmount = Number(amount)
 
   if (!userId) throw createServiceError('permission-denied', 'A signed-in user is required.')
@@ -37,6 +38,7 @@ export function createDepositRequest({ userId, amount, method, accountHolderName
     updatedAt: serverTimestamp(),
   }
   if (isBankMethod(method)) request.bankName = bankName.trim()
+  await requirePlatformFeature('allowDeposits', 'New deposit requests are temporarily disabled.')
   return addDoc(collection(db, 'deposits'), request)
 }
 

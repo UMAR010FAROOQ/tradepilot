@@ -4,6 +4,7 @@ import { marketBySymbol } from '../data/markets.js'
 import { createServiceError } from '../utils/firestoreErrors.js'
 import { auth, db } from './firebase.js'
 import { enforceBuyRisk } from './riskService.js'
+import { requirePlatformFeature } from './platformSettingsService.js'
 
 function requireOwner(userId) {
   if (!auth.currentUser || auth.currentUser.uid !== userId) {
@@ -13,6 +14,7 @@ function requireOwner(userId) {
 
 export async function createLimitOrder({ userId, symbol, side = 'BUY', quantity, limitPrice, stopLoss, takeProfit }) {
   requireOwner(userId)
+  if (side === 'BUY') await requirePlatformFeature('allowTrading', 'Opening new buy exposure is temporarily disabled.')
   const market = marketBySymbol.get(symbol)
   const resolvedQuantity = Number(Number(quantity).toFixed(MAX_DECIMAL_QUANTITY))
   const resolvedLimit = Number(limitPrice)
@@ -80,6 +82,7 @@ export async function editPendingOrder({ userId, orderId, quantity, limitPrice, 
   const currentSnapshot = await getDoc(orderRef)
   if (!currentSnapshot.exists() || currentSnapshot.data().userId !== userId) throw createServiceError('trading/order-missing', 'This order no longer exists.')
   const currentOrder = currentSnapshot.data()
+  if (currentOrder.side === 'BUY') await requirePlatformFeature('allowTrading', 'Opening new buy exposure is temporarily disabled.')
   const preflightStop = currentOrder.side === 'BUY' && stopLoss !== '' && stopLoss !== null ? Number(stopLoss) : null
   if (currentOrder.side === 'BUY') await enforceBuyRisk({ userId, symbol: currentOrder.symbol, quantity: resolvedQuantity, entryPrice: resolvedLimit, stopLoss: preflightStop })
   await runTransaction(db, async (transaction) => {

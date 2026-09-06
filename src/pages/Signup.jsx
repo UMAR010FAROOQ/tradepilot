@@ -7,6 +7,7 @@ import useAuth from '../hooks/useAuth.js'
 import { getFirebaseErrorMessage } from '../utils/firebaseErrors.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { needsEmailVerification } from '../utils/emailVerification.js'
+import usePlatformSettings from '../hooks/usePlatformSettings.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -37,12 +38,15 @@ function Signup() {
   const [needsRecovery, setNeedsRecovery] = useState(false)
   const { currentUser, loading, signup, initializeAccount, completeSignupVerification } = useAuth()
   const navigate = useNavigate()
+  const { settings, loading: settingsLoading } = usePlatformSettings()
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return <p className="py-10 text-center text-sm text-muted">Checking your session…</p>
   }
 
   if (currentUser && !error && !isSubmitting) return <Navigate replace to={needsEmailVerification(currentUser) ? '/verify-email' : '/dashboard'} />
+
+  if (!settings.allowSignup) return <div className="py-6 text-center"><CircleAlert className="mx-auto size-9 text-warning" /><h1 className="mt-4 text-2xl font-semibold">Registration is temporarily closed</h1><p className="mt-2 text-sm leading-6 text-muted">New TradePilot accounts cannot be created right now. Please try again later or contact support.</p><Link className="mt-6 inline-block text-sm font-semibold text-accent" to="/login">Return to sign in</Link></div>
 
   const updateField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))

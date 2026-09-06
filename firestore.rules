@@ -41,6 +41,61 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time;
     }
 
+    function validAdminStatusUpdate(userId) {
+      return isAdmin() && request.auth.uid != userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountStatus', 'updatedAt']) &&
+        request.resource.data.accountStatus in ['active', 'suspended'] && request.resource.data.updatedAt == request.time;
+    }
+
+    function platformTradingAllowed() {
+      return !exists(/databases/$(database)/documents/platformSettings/config) ||
+        get(/databases/$(database)/documents/platformSettings/config).data.allowTrading == true;
+    }
+
+    function platformDepositsAllowed() {
+      return !exists(/databases/$(database)/documents/platformSettings/config) ||
+        get(/databases/$(database)/documents/platformSettings/config).data.allowDeposits == true;
+    }
+
+    function platformWithdrawalsAllowed() {
+      return !exists(/databases/$(database)/documents/platformSettings/config) ||
+        get(/databases/$(database)/documents/platformSettings/config).data.allowWithdrawals == true;
+    }
+
+    function platformSignupAllowed() {
+      return !exists(/databases/$(database)/documents/platformSettings/config) ||
+        get(/databases/$(database)/documents/platformSettings/config).data.allowSignup == true;
+    }
+
+    function validPlatformSettings() {
+      return hasExactFields(['maintenanceMode', 'allowSignup', 'allowTrading', 'allowDeposits', 'allowWithdrawals', 'updatedAt', 'updatedBy']) &&
+        request.resource.data.maintenanceMode is bool && request.resource.data.allowSignup is bool &&
+        request.resource.data.allowTrading is bool && request.resource.data.allowDeposits is bool &&
+        request.resource.data.allowWithdrawals is bool && request.resource.data.updatedAt == request.time &&
+        request.resource.data.updatedBy == request.auth.uid;
+    }
+
+    function validAdminNote() {
+      return hasExactFields(['userId', 'adminUserId', 'note', 'createdAt', 'updatedAt']) &&
+        request.resource.data.userId is string && request.resource.data.adminUserId == request.auth.uid &&
+        request.resource.data.note is string && request.resource.data.note.size() > 0 && request.resource.data.note.size() <= 2000 &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+    }
+
+    function validAuditLog() {
+      let data = request.resource.data;
+      return hasExactFields(['actorUserId', 'targetUserId', 'action', 'resourceType', 'resourceId', 'metadata', 'createdAt']) &&
+        data.actorUserId == request.auth.uid && data.targetUserId is string && data.resourceId is string &&
+        data.action in ['role_changed', 'account_suspended', 'account_reactivated', 'deposit_approved', 'deposit_rejected', 'withdrawal_approved', 'withdrawal_rejected'] &&
+        data.resourceType in ['user', 'deposit', 'withdrawal'] && data.metadata is map &&
+        data.metadata.keys().hasOnly(['from', 'to']) && data.metadata.from is string && data.metadata.to is string && data.createdAt == request.time &&
+        ((data.resourceType == 'user' && data.resourceId == data.targetUserId &&
+          ((data.action == 'role_changed' && get(/databases/$(database)/documents/users/$(data.resourceId)).data.role == data.metadata.from && getAfter(/databases/$(database)/documents/users/$(data.resourceId)).data.role == data.metadata.to) ||
+           (data.action in ['account_suspended', 'account_reactivated'] && get(/databases/$(database)/documents/users/$(data.resourceId)).data.accountStatus == data.metadata.from && getAfter(/databases/$(database)/documents/users/$(data.resourceId)).data.accountStatus == data.metadata.to && ((data.action == 'account_suspended' && data.metadata.to == 'suspended') || (data.action == 'account_reactivated' && data.metadata.to == 'active'))))) ||
+         (data.resourceType == 'deposit' && get(/databases/$(database)/documents/deposits/$(data.resourceId)).data.userId == data.targetUserId && get(/databases/$(database)/documents/deposits/$(data.resourceId)).data.status == 'pending' && data.metadata.from == 'pending' && getAfter(/databases/$(database)/documents/deposits/$(data.resourceId)).data.status == data.metadata.to && ((data.action == 'deposit_approved' && data.metadata.to == 'approved') || (data.action == 'deposit_rejected' && data.metadata.to == 'rejected'))) ||
+         (data.resourceType == 'withdrawal' && get(/databases/$(database)/documents/withdrawals/$(data.resourceId)).data.userId == data.targetUserId && get(/databases/$(database)/documents/withdrawals/$(data.resourceId)).data.status == 'pending' && data.metadata.from == 'pending' && getAfter(/databases/$(database)/documents/withdrawals/$(data.resourceId)).data.status == data.metadata.to && ((data.action == 'withdrawal_approved' && data.metadata.to == 'approved') || (data.action == 'withdrawal_rejected' && data.metadata.to == 'rejected'))));
+    }
+
     function validRiskSettings(data, userId) {
       return data.keys().hasAll(['userId', 'maxTradeRiskPercent', 'maxPositionPercent', 'dailyLossLimitPercent', 'maxOpenPositions', 'riskProtectionEnabled', 'createdAt', 'updatedAt']) &&
         data.keys().hasOnly(['userId', 'maxTradeRiskPercent', 'maxPositionPercent', 'dailyLossLimitPercent', 'maxOpenPositions', 'riskProtectionEnabled', 'createdAt', 'updatedAt']) &&
@@ -417,7 +472,7 @@ service cloud.firestore {
         tradeData.userId == request.auth.uid &&
         tradeData.symbol is string &&
         tradeData.marketType in ['crypto', 'forex'] &&
-        tradeData.side in ['BUY', 'SELL'] &&
+        tradeData.side in ['BUY', 'SELL'] && (tradeData.side == 'SELL' || platformTradingAllowed()) &&
         tradeData.quantity is number && tradeData.quantity > 0 &&
         tradeData.executionPrice is number && tradeData.executionPrice > 0 &&
         tradeData.grossAmount is number && tradeData.grossAmount >= 1 &&
@@ -582,7 +637,7 @@ service cloud.firestore {
         data.marketType in ['crypto', 'forex'] && data.side in ['BUY', 'SELL'] &&
         data.orderType == 'limit' && data.quantity is number && data.quantity > 0 &&
         data.limitPrice is number && data.limitPrice > 0 &&
-        ((data.side == 'BUY' && data.reduceOnly == false &&
+        ((data.side == 'BUY' && platformTradingAllowed() && data.reduceOnly == false &&
           (data.stopLoss == null || (data.stopLoss is number && data.stopLoss > 0 && data.stopLoss < data.limitPrice)) &&
           (data.takeProfit == null || (data.takeProfit is number && data.takeProfit > data.limitPrice))) ||
          (data.side == 'SELL' && data.reduceOnly == true && data.stopLoss == null && data.takeProfit == null &&
@@ -615,7 +670,7 @@ service cloud.firestore {
           request.resource.data.stopLoss == null && request.resource.data.takeProfit == null &&
           get(/databases/$(database)/documents/positions/$(request.auth.uid + '_' + resource.data.symbol)).data.status == 'open' &&
           request.resource.data.quantity <= get(/databases/$(database)/documents/positions/$(request.auth.uid + '_' + resource.data.symbol)).data.quantity)) &&
-        request.resource.data.updatedAt == request.time;
+        request.resource.data.updatedAt == request.time && (resource.data.side == 'SELL' || platformTradingAllowed());
     }
 
     function validOrderFill(orderId) {
@@ -639,7 +694,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if ownsDocument(userId) || isAdmin();
 
-      allow create: if ownsDocument(userId) &&
+      allow create: if ownsDocument(userId) && platformSignupAllowed() &&
         hasExactFields([
           'uid',
           'fullName',
@@ -663,7 +718,7 @@ service cloud.firestore {
           request.resource.data.fullName is string &&
           request.resource.data.fullName.size() > 0 &&
           request.resource.data.updatedAt == request.time) ||
-        validAdminRoleUpdate(userId);
+        validAdminRoleUpdate(userId) || validAdminStatusUpdate(userId);
     }
 
     match /wallets/{userId} {
@@ -727,7 +782,7 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow read: if (isActiveUser() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isActiveUser() && validPendingOrderCreate();
       allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
         (validOrderCancel() || validOrderEdit() || validOrderFill(orderId));
@@ -821,7 +876,7 @@ service cloud.firestore {
     match /deposits/{depositId} {
       allow read: if (isActiveUser() && resource.data.userId == request.auth.uid) || isAdmin();
 
-      allow create: if isActiveUser() &&
+      allow create: if isActiveUser() && platformDepositsAllowed() &&
         request.resource.data.keys().hasAll([
           'userId',
           'amount',
@@ -859,7 +914,7 @@ service cloud.firestore {
     match /withdrawals/{withdrawalId} {
       allow read: if (isActiveUser() && resource.data.userId == request.auth.uid) || isAdmin();
 
-      allow create: if isActiveUser() &&
+      allow create: if isActiveUser() && platformWithdrawalsAllowed() &&
         request.resource.data.keys().hasAll([
           'userId',
           'amount',
@@ -912,6 +967,25 @@ service cloud.firestore {
         request.resource.data.symbols is list &&
         request.resource.data.symbols.size() <= 100 &&
         request.resource.data.updatedAt == request.time;
+    }
+
+    match /platformSettings/{settingsId} {
+      allow read: if settingsId == 'config';
+      allow create, update: if settingsId == 'config' && isAdmin() && validPlatformSettings();
+    }
+
+    match /adminUserNotes/{noteId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && validAdminNote();
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['note', 'updatedAt']) &&
+        request.resource.data.note is string && request.resource.data.note.size() > 0 && request.resource.data.note.size() <= 2000 && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{auditId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && validAuditLog();
+      allow update, delete: if false;
     }
   }
 }

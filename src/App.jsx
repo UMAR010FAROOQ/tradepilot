@@ -4,6 +4,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute.jsx'
 import AdminRoute from './components/auth/AdminRoute.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { WalletProvider } from './context/WalletContext.jsx'
+import { PlatformSettingsProvider } from './context/PlatformSettingsContext.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import AdminLayout from './layouts/AdminLayout.jsx'
@@ -41,12 +42,16 @@ const AdminDeposits = lazy(() => import('./pages/admin/Deposits.jsx'))
 const AdminWithdrawals = lazy(() => import('./pages/admin/Withdrawals.jsx'))
 const AdminTransactions = lazy(() => import('./pages/admin/Transactions.jsx'))
 const AdminTrades = lazy(() => import('./pages/admin/Trades.jsx'))
+const AdminUserDetail = lazy(() => import('./pages/admin/UserDetail.jsx'))
+const AdminAuditLogs = lazy(() => import('./pages/admin/AuditLogs.jsx'))
+const AdminSettings = lazy(() => import('./pages/admin/PlatformSettings.jsx'))
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <WalletProvider>
+        <PlatformSettingsProvider>
+          <WalletProvider>
           <NetworkStatus />
           <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
@@ -87,17 +92,21 @@ function App() {
             <Route element={<AdminLayout />}>
               <Route path="admin" element={<AdminDashboard />} />
               <Route path="admin/users" element={<AdminUsers />} />
+              <Route path="admin/users/:userId" element={<AdminUserDetail />} />
               <Route path="admin/deposits" element={<AdminDeposits />} />
               <Route path="admin/withdrawals" element={<AdminWithdrawals />} />
               <Route path="admin/transactions" element={<AdminTransactions />} />
               <Route path="admin/trades" element={<AdminTrades />} />
+              <Route path="admin/audit-logs" element={<AdminAuditLogs />} />
+              <Route path="admin/settings" element={<AdminSettings />} />
             </Route>
           </Route>
 
           <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
-        </WalletProvider>
+          </WalletProvider>
+        </PlatformSettingsProvider>
       </AuthProvider>
     </BrowserRouter>
   )

@@ -13,6 +13,7 @@ import Input from '../common/Input.jsx'
 import Modal from '../common/Modal.jsx'
 import OrderPresets from './OrderPresets.jsx'
 import useRisk from '../../hooks/useRisk.js'
+import usePlatformSettings from '../../hooks/usePlatformSettings.js'
 import { evaluateTradeRisk } from '../../services/riskService.js'
 
 const balanceRisks = [1, 2, 3, 5]
@@ -35,6 +36,7 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
   const riskData = useRisk()
+  const { settings } = usePlatformSettings()
 
   const entry = orderType === 'limit' ? Number(limitPrice) : ticker?.price
   const numericQuantity = Number(quantity)
@@ -81,6 +83,7 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
 
   const validate = () => {
     if (!marketOpen) return 'Market is closed. New orders are unavailable.'
+    if (orderSide === 'BUY' && !settings.allowTrading) return 'Opening new buy exposure is temporarily disabled. Sell and protective exits remain available.'
     if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) return 'Enter a valid quantity greater than zero.'
     if (!Number.isFinite(entry) || entry <= 0) return orderType === 'limit' ? 'Enter a valid limit price.' : 'Market price is currently unavailable.'
     if (grossAmount < MIN_TRADE_USD) return `Trade amount must be at least $${MIN_TRADE_USD}.`
@@ -148,7 +151,8 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
       {error && <div className="flex gap-2 rounded-lg border border-negative/25 bg-negative/10 p-3 text-xs text-negative" role="alert"><CircleAlert className="size-4 shrink-0" />{error}</div>}
       {!marketOpen && !error && <div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning" role="status">Market closed. Viewing and protection edits remain available.</div>}
       <dl className="space-y-2 border-t border-border pt-4 text-xs">{summary.slice(5).map(([label, value]) => <div className={`flex justify-between gap-3 ${label.includes('Estimated total') || label === 'Estimated proceeds' ? 'font-semibold text-foreground' : ''}`} key={label}><dt className="text-muted">{label}</dt><dd className="financial-value text-right">{value}</dd></div>)}</dl>
-      <Button disabled={!wallet || !ticker || processing || !marketOpen} fullWidth size="lg" type="submit" variant={orderSide === 'BUY' ? 'success' : 'danger'}>{orderType === 'market' ? 'Review Market Buy' : `Review Limit ${orderSide === 'BUY' ? 'Buy' : 'Sell'}`}</Button>
+      {orderSide === 'BUY' && !settings.allowTrading && <div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs leading-5 text-warning">New buy exposure is temporarily disabled. You can still sell, manage protection, and cancel orders.</div>}
+      <Button disabled={!wallet || !ticker || processing || !marketOpen || (orderSide === 'BUY' && !settings.allowTrading)} fullWidth size="lg" type="submit" variant={orderSide === 'BUY' ? 'success' : 'danger'}>{orderType === 'market' ? 'Review Market Buy' : `Review Limit ${orderSide === 'BUY' ? 'Buy' : 'Sell'}`}</Button>
       <div className="flex gap-2 text-[10px] leading-4 text-muted"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" /><p>Simulated only. Pending orders and SL/TP are evaluated while TradePilot is open; they are not exchange-grade protection.</p></div>
     </form>
     <Modal description={`${market.displaySymbol} · simulated ${orderSide}`} footer={<><Button disabled={processing} onClick={() => setConfirmation(null)} variant="ghost">Back</Button><Button disabled={processing} onClick={confirmOrder} variant={orderSide === 'BUY' ? 'success' : 'danger'}>{processing ? 'Processing…' : orderType === 'market' ? 'Confirm Market Buy' : 'Place Limit Order'}</Button></>} isOpen={Boolean(confirmation)} onClose={() => !processing && setConfirmation(null)} title={orderType === 'market' ? 'Confirm Market Buy' : `Place Limit ${orderSide === 'BUY' ? 'Buy' : 'Sell'}`}><dl className="space-y-3 text-sm">{summary.map(([label, value]) => <div className={`flex justify-between gap-4 ${label === 'Estimated total cost' ? 'border-t border-border pt-3 font-semibold' : ''}`} key={label}><dt className="text-muted">{label}</dt><dd className={`financial-value text-right ${label === 'Side' ? orderSide === 'BUY' ? 'text-positive' : 'text-negative' : ''}`}>{value}</dd></div>)}</dl></Modal>
