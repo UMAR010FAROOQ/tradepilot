@@ -26,7 +26,10 @@ function prepareSignals(candles, strategy, rawParameters) {
   const parameters = Object.fromEntries(Object.entries(rawParameters).map(([key, value]) => [key, Number(value)])), closes = candles.map((candle) => candle.close)
   if (strategy === 'ma') {
     const fast = sma(closes, parameters.fastPeriod), slow = sma(closes, parameters.slowPeriod)
-    return candles.map((_, index) => ({ buy: index > 0 && fast[index - 1] <= slow[index - 1] && fast[index] > slow[index], sell: index > 0 && fast[index - 1] >= slow[index - 1] && fast[index] < slow[index], info: { fastMA: fast[index], slowMA: slow[index] } }))
+    return candles.map((_, index) => {
+      const ready = index > 0 && [fast[index - 1], slow[index - 1], fast[index], slow[index]].every(Number.isFinite)
+      return { buy: ready && fast[index - 1] <= slow[index - 1] && fast[index] > slow[index], sell: ready && fast[index - 1] >= slow[index - 1] && fast[index] < slow[index], info: { fastMA: fast[index], slowMA: slow[index] } }
+    })
   }
   if (strategy === 'rsi') {
     const values = rsi(closes, parameters.rsiPeriod)
