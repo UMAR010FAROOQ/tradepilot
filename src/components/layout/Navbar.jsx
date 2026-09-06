@@ -93,7 +93,7 @@ function Navbar({ onMenuClick }) {
           <p className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-muted sm:block">
             Workspace
           </p>
-          <p className="truncate text-sm font-semibold text-foreground sm:text-base">{pageTitle}</p>
+          <p className="truncate text-sm font-semibold text-positive sm:text-base">{pageTitle}</p>
         </div>
       </div>
 
