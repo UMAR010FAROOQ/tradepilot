@@ -14,8 +14,10 @@ import {
 } from './forexMarketService.js'
 
 const BULK_TICKER_TTL = 10000
+const HISTORICAL_CACHE_TTL = 180000
 let bulkTickerPromise = null
 let bulkTickerExpiresAt = 0
+const historicalCache = new Map()
 
 function marketFor(symbol) {
   const market = marketBySymbol.get(symbol)
@@ -50,6 +52,19 @@ export function getHistoricalCandles(symbol, interval) {
   return marketFor(symbol).type === 'crypto'
     ? getBinanceHistoricalCandles(symbol, interval)
     : getForexHistoricalCandles(symbol, interval)
+}
+
+export async function getCachedHistoricalCandles(symbol, interval, options = {}) {
+  const key = `${symbol}:${interval}`, cached = historicalCache.get(key)
+  const maxAge = options.maxAge ?? HISTORICAL_CACHE_TTL
+  if (!options.force && cached?.promise) return cached.promise
+  if (!options.force && cached?.candles && Date.now() - cached.loadedAt < maxAge) return cached.candles
+  const promise = Promise.resolve(getHistoricalCandles(symbol, interval)).then((candles) => {
+    historicalCache.set(key, { candles, loadedAt: Date.now() })
+    return candles
+  }).catch((error) => { historicalCache.delete(key); throw error })
+  historicalCache.set(key, { promise, loadedAt: Date.now() })
+  return promise
 }
 
 export function subscribeToTicker(symbol, callback, onError, onStatus) {

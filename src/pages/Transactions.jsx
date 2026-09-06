@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, CircleAlert, Copy, ReceiptText } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, CircleAlert, Copy, Download, ReceiptText } from 'lucide-react'
 import Badge from '../components/common/Badge.jsx'
 import Card from '../components/common/Card.jsx'
 import PageHeader from '../components/common/PageHeader.jsx'
@@ -15,6 +15,8 @@ import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { maskAccount, requestAccount } from '../utils/paymentDetails.js'
 import { formatPrice, formatQuantity } from '../utils/marketFormatters.js'
 import { marketBySymbol } from '../data/markets.js'
+import { downloadCsv } from '../utils/csv.js'
+import JournalEditor from '../components/trading/JournalEditor.jsx'
 
 const tabs = ['All', 'Deposits', 'Withdrawals', 'Trades']
 
@@ -108,9 +110,16 @@ function Transactions() {
     ? loading.trades
     : loading.deposits || loading.withdrawals
 
+  const exportTrades = () => downloadCsv(
+    `tradepilot-trades-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Trade ID', 'Symbol', 'Market Type', 'Side', 'Quantity', 'Execution Price', 'Gross Amount', 'Fee', 'Net Amount', 'Realized P&L', 'Status', 'Executed At'],
+    trades.map((trade) => [trade.id, trade.symbol, trade.marketType, trade.side, trade.quantity, trade.executionPrice, trade.grossAmount, trade.fee, trade.netAmount, trade.realizedPnl, trade.status, trade.createdAt?.toDate?.().toISOString() || '']),
+  )
+
   return (
     <div className="space-y-6">
       <PageHeader
+        actions={<Button disabled={!trades.length} onClick={exportTrades} variant="secondary"><Download className="size-4" />Export Trades CSV</Button>}
         description="Your funding activity and simulated market orders."
         eyebrow="Activity"
         title="Transactions"
@@ -233,7 +242,7 @@ function Transactions() {
           </div>
         )}
       </Card>
-      <Modal description={selectedTrade ? `${selectedTrade.side} · ${selectedTrade.symbol}` : ''} footer={<Button onClick={() => setSelectedTrade(null)} variant="secondary">Close</Button>} isOpen={Boolean(selectedTrade)} onClose={() => setSelectedTrade(null)} title="Trade details">
+      <Modal description={selectedTrade ? `${selectedTrade.side} · ${selectedTrade.symbol}` : ''} footer={<>{selectedTrade && <JournalEditor trade={selectedTrade} userId={currentUser.uid} />}<Button onClick={() => setSelectedTrade(null)} variant="secondary">Close</Button></>} isOpen={Boolean(selectedTrade)} onClose={() => setSelectedTrade(null)} title="Trade details">
         {selectedTrade && <div className="space-y-4"><div className="rounded-lg border border-border bg-surface p-3"><p className="text-xs text-muted">Trade ID</p><div className="mt-2 flex items-center justify-between gap-3"><code className="min-w-0 break-all text-xs text-foreground">{selectedTrade.id}</code><Button aria-label="Copy trade ID" onClick={copyTradeId} size="sm" variant="ghost"><Copy className="size-3.5" />{copied ? 'Copied' : 'Copy'}</Button></div>{copied && <p className="mt-2 text-xs text-positive" role="status">Trade ID copied.</p>}</div><dl className="grid grid-cols-2 gap-4 text-sm">{[['Market', selectedTrade.symbol], ['Market type', selectedTrade.marketType], ['Side', selectedTrade.side], ['Quantity', selectedTrade.quantity], ['Execution price', formatCurrency(selectedTrade.executionPrice)], ['Gross amount', formatCurrency(selectedTrade.grossAmount)], ['Fee', formatCurrency(selectedTrade.fee)], ['Net amount', formatCurrency(selectedTrade.netAmount)], ['Realized P/L', selectedTrade.side === 'SELL' ? formatCurrency(selectedTrade.realizedPnl) : 'Not applicable'], ['Status', selectedTrade.status], ['Executed at', formatDate(selectedTrade.createdAt)]].map(([label, value]) => <div className={label === 'Executed at' ? 'col-span-2' : ''} key={label}><dt className="text-xs text-muted">{label}</dt><dd className="financial-value mt-1 break-words">{value}</dd></div>)}</dl></div>}
       </Modal>
     </div>

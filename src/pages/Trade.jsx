@@ -11,6 +11,9 @@ import PendingOrders from '../components/trading/PendingOrders.jsx'
 import PriceChange from '../components/trading/PriceChange.jsx'
 import RecentTrades from '../components/trading/RecentTrades.jsx'
 import TradingCalculator from '../components/trading/TradingCalculator.jsx'
+import PriceAlertsPanel from '../components/trading/PriceAlertsPanel.jsx'
+import ActivityTimeline from '../components/trading/ActivityTimeline.jsx'
+import MarketNotes from '../components/trading/MarketNotes.jsx'
 import { marketBySymbol, markets } from '../data/markets.js'
 import useAuth from '../hooks/useAuth.js'
 import useWallet from '../hooks/useWallet.js'
@@ -18,6 +21,7 @@ import { getHistoricalCandles, subscribeToTicker } from '../services/marketServi
 import { subscribeToSymbolOrders } from '../services/orderService.js'
 import { subscribeToPosition } from '../services/positionService.js'
 import { subscribeToSymbolTrades } from '../services/tradeService.js'
+import { subscribeToPriceAlerts } from '../services/priceAlertService.js'
 import { getFirestoreErrorMessage } from '../utils/firestoreErrors.js'
 import { formatPrice, formatVolume } from '../utils/marketFormatters.js'
 import { getForexSessionStatus } from '../utils/forexSession.js'
@@ -46,6 +50,7 @@ function Trade() {
   const [pendingOrders, setPendingOrders] = useState([])
   const [trades, setTrades] = useState([])
   const [showTradeLevels, setShowTradeLevels] = useState(true)
+  const [alerts, setAlerts] = useState([])
   const { currentUser } = useAuth()
   const { wallet } = useWallet()
   const navigate = useNavigate()
@@ -80,6 +85,7 @@ function Trade() {
 
   useEffect(() => subscribeToSymbolOrders(currentUser.uid, symbol, setPendingOrders, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid, symbol])
   useEffect(() => subscribeToSymbolTrades(currentUser.uid, symbol, setTrades, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid, symbol])
+  useEffect(() => subscribeToPriceAlerts(currentUser.uid, setAlerts, (requestError) => setStreamError(getFirestoreErrorMessage(requestError))), [currentUser.uid])
 
   const stats = useMemo(() => ticker ? [
     ['24h high', formatPrice(ticker.high24h, market)],
@@ -90,6 +96,7 @@ function Trade() {
   const marketOpen = market.type === 'crypto' || Boolean(forexSession?.isOpen && ticker?.marketStatus === 'Open' && ticker?.connectionStatus === 'live' && !ticker?.isStale)
   const selectedTrades = useMemo(() => trades.slice(0, 5), [trades])
   const openOrders = useMemo(() => pendingOrders.filter((order) => order.status === 'pending'), [pendingOrders])
+  const symbolAlerts = useMemo(() => alerts.filter((alert) => alert.symbol === symbol), [alerts, symbol])
   const chartLevels = useMemo(() => {
     const levels = []
     if (position?.status === 'open') {
@@ -148,7 +155,10 @@ function Trade() {
       </div>
       {!positionLoading && <OpenPositionPanel market={market} marketOpen={marketOpen} onComplete={setTradeNotice} position={position} ticker={ticker} userId={currentUser.uid} />}
       <PendingOrders market={market} onComplete={setTradeNotice} orders={pendingOrders} userId={currentUser.uid} />
-      <RecentTrades market={market} trades={selectedTrades} />
+      <PriceAlertsPanel alerts={symbolAlerts} market={market} onComplete={setTradeNotice} ticker={ticker} userId={currentUser.uid} />
+      <RecentTrades market={market} trades={selectedTrades} userId={currentUser.uid} />
+      <ActivityTimeline alerts={symbolAlerts} orders={pendingOrders} trades={trades} />
+      <MarketNotes symbol={symbol} userId={currentUser.uid} />
       <Card><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-lg bg-elevated text-muted"><ShieldCheck className="size-4" /></span><div><h2 className="text-sm font-semibold">Client-side simulated execution</h2><p className="mt-1 text-xs leading-5 text-muted">Fresh provider quotes are requested before fills and closes. Pending orders and stop-loss/take-profit monitoring work only while TradePilot is open and are not exchange-grade protection.</p></div></div></Card>
     </div>
   )

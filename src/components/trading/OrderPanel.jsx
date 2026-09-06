@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Calculator, CircleAlert, ShieldCheck, WalletCards } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { MAX_DECIMAL_QUANTITY, MIN_TRADE_USD, TRADING_FEE_RATE } from '../../constants/trading.js'
 import { getTicker } from '../../services/marketService.js'
 import { createLimitOrder } from '../../services/orderService.js'
@@ -10,6 +11,9 @@ import { formatPrice } from '../../utils/marketFormatters.js'
 import Button from '../common/Button.jsx'
 import Input from '../common/Input.jsx'
 import Modal from '../common/Modal.jsx'
+import OrderPresets from './OrderPresets.jsx'
+import useRisk from '../../hooks/useRisk.js'
+import { evaluateTradeRisk } from '../../services/riskService.js'
 
 const balanceRisks = [1, 2, 3, 5]
 
@@ -30,6 +34,7 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
   const [confirmation, setConfirmation] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+  const riskData = useRisk()
 
   const entry = orderType === 'limit' ? Number(limitPrice) : ticker?.price
   const numericQuantity = Number(quantity)
@@ -55,6 +60,22 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
   const suggestedQuantity = risk.perUnit && Number.isFinite(requestedRisk) && requestedRisk > 0
     ? Math.min(requestedRisk / risk.perUnit, affordableQuantity)
     : 0
+  const riskCheck = useMemo(() => evaluateTradeRisk({ symbol: market.symbol, side: orderSide, quantity: numericQuantity, entryPrice: entry, stopLoss: sl, ...riskData }), [entry, market.symbol, numericQuantity, orderSide, riskData, sl])
+  const presetSetup = {
+    riskPercent: wallet?.availableBalance > 0 && requestedRisk > 0 ? requestedRisk / wallet.availableBalance * 100 : 2,
+    stopLossPercent: Number.isFinite(entry) && Number.isFinite(sl) && sl < entry ? (entry - sl) / entry * 100 : null,
+    takeProfitRatio: risk.perUnit && Number.isFinite(tp) ? (tp - entry) / risk.perUnit : null,
+  }
+  const applyPreset = (preset) => {
+    if (!Number.isFinite(entry) || entry <= 0) { setError('Enter a valid entry price before applying a preset.'); return }
+    setRiskAmount(((wallet?.availableBalance || 0) * preset.riskPercent / 100).toFixed(2))
+    if (preset.stopLossPercent) {
+      const nextStop = entry * (1 - preset.stopLossPercent / 100)
+      setStopLoss(String(nextStop))
+      if (preset.takeProfitRatio) setTakeProfit(String(entry + (entry - nextStop) * preset.takeProfitRatio))
+    }
+    setError('')
+  }
 
   const setBalanceRisk = (percent) => setRiskAmount(((wallet?.availableBalance || 0) * percent / 100).toFixed(2))
 
@@ -68,6 +89,7 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
     if (orderSide === 'BUY' && sl !== null && (!Number.isFinite(sl) || sl <= 0 || sl >= entry)) return 'Stop loss must be below the estimated entry price.'
     if (orderSide === 'BUY' && tp !== null && (!Number.isFinite(tp) || tp <= entry)) return 'Take profit must be above the estimated entry price.'
     if (orderSide === 'BUY' && total > (wallet?.availableBalance || 0)) return 'Insufficient balance for the estimated total cost.'
+    if (orderSide === 'BUY' && !riskCheck.allowed) return riskCheck.violations[0]
     return ''
   }
 
@@ -116,6 +138,8 @@ function OrderPanel({ userId, market, ticker, wallet, marketOpen, onComplete, po
     <div className="grid grid-cols-2 border-b border-border p-2" role="tablist" aria-label="Order type">{['market', 'limit'].map((type) => <button aria-selected={orderType === type} className={`h-10 rounded-lg text-xs font-bold capitalize transition ${orderType === type ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-elevated hover:text-foreground'}`} key={type} onClick={() => { setOrderType(type); if (type === 'market') setOrderSide('BUY'); setError('') }} role="tab" type="button">{type}</button>)}</div>
     <form className="space-y-5 p-5" onSubmit={prepareOrder}>
       <div className="rounded-lg border border-border bg-elevated/50 p-3"><div className="flex items-center justify-between gap-3 text-xs"><span className="flex items-center gap-2 text-muted"><WalletCards className="size-4" />Available balance</span><span className="financial-value font-semibold">{wallet ? formatCurrency(wallet.availableBalance, wallet.currency) : 'Loading…'}</span></div></div>
+      <OrderPresets onApply={applyPreset} setup={presetSetup} userId={userId} />
+      <section className="rounded-lg border border-border bg-surface p-3"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-xs font-semibold"><ShieldCheck className={`size-4 ${riskData.settings?.riskProtectionEnabled === false ? 'text-muted' : 'text-positive'}`} />Risk Summary · {riskData.settings?.riskProtectionEnabled === false ? 'Protection off' : 'Protection active'}</span><Link className="text-[10px] font-semibold text-accent hover:underline" to="/risk-management">Manage</Link></div><dl className="mt-3 grid grid-cols-2 gap-3 text-[10px]"><div><dt className="text-muted">Account Equity</dt><dd className="financial-value mt-1 text-xs">{formatCurrency(riskCheck.metrics.accountEquity)}</dd></div><div><dt className="text-muted">Order Risk</dt><dd className="financial-value mt-1 text-xs">{riskCheck.metrics.tradeRiskPercent === null ? 'No SL' : `${riskCheck.metrics.tradeRiskPercent.toFixed(1)}% / ${riskData.settings?.maxTradeRiskPercent ?? 5}%`}</dd></div><div><dt className="text-muted">Position Size</dt><dd className="financial-value mt-1 text-xs">{riskCheck.metrics.positionPercent.toFixed(1)}% / {riskData.settings?.maxPositionPercent ?? 50}%</dd></div><div><dt className="text-muted">Daily Loss Used</dt><dd className="financial-value mt-1 text-xs">{formatCurrency(riskCheck.metrics.dailyLossUsed)} / {formatCurrency(riskCheck.metrics.dailyLossLimitAmount)}</dd></div><div><dt className="text-muted">Open Positions</dt><dd className="financial-value mt-1 text-xs">{riskCheck.metrics.openPositionCount} / {riskData.settings?.maxOpenPositions ?? 5}</dd></div></dl>{orderType === 'limit' && orderSide === 'BUY' && <p className="mt-3 border-t border-border pt-3 text-[10px] text-muted">Pending BUY orders are revalidated when triggered.</p>}{orderSide === 'BUY' && riskCheck.warnings.length > 0 && <div className="mt-3 space-y-1 border-t border-border pt-3">{riskCheck.warnings.map((warning) => <p className="text-[10px] leading-4 text-warning" key={warning}>Warning: {warning}</p>)}</div>}{orderSide === 'BUY' && !riskCheck.allowed && <div className="mt-3 space-y-1 border-t border-border pt-3">{riskCheck.violations.map((violation) => <p className="text-[10px] leading-4 text-negative" key={violation}>Blocked: {violation}</p>)}</div>}</section>
       {orderType === 'limit' && <div className="grid grid-cols-2 gap-2">{['BUY', 'SELL'].map((side) => <button aria-pressed={orderSide === side} className={`h-9 rounded-lg border text-xs font-bold ${orderSide === side ? side === 'BUY' ? 'border-positive/40 bg-positive/10 text-positive' : 'border-negative/40 bg-negative/10 text-negative' : 'border-border text-muted'}`} key={side} onClick={() => { setOrderSide(side); setError('') }} type="button">{side === 'SELL' ? 'Limit Sell · Reduce Only' : 'Limit Buy'}</button>)}</div>}
       <div className="grid grid-cols-2 gap-3"><div><p className="text-xs text-muted">Side</p><p className={`mt-1 text-sm font-bold ${orderSide === 'BUY' ? 'text-positive' : 'text-negative'}`}>{orderSide}{orderSide === 'SELL' ? ' · Reduce Only' : ' · Long'}</p></div><div><p className="text-xs text-muted">Live price</p><p className="financial-value mt-1 text-sm font-semibold">{formatPrice(ticker?.price, market)}</p></div></div>
       {orderType === 'limit' && <Input inputMode="decimal" label="Limit price" min="0" onChange={(event) => { setLimitPrice(event.target.value); setError('') }} placeholder="Target price" step="any" type="number" value={limitPrice} />}

@@ -5,6 +5,8 @@ import { getTicker, subscribeToTicker } from '../../services/marketService.js'
 import { subscribeToAllPendingOrders } from '../../services/orderService.js'
 import { advanceTrailingStop, subscribeToOpenPositions } from '../../services/positionService.js'
 import { executePendingLimitOrder, executeProtectionClose } from '../../services/tradeService.js'
+import { subscribeToActivePriceAlerts, triggerPriceAlert } from '../../services/priceAlertService.js'
+import { marketBySymbol } from '../../data/markets.js'
 
 function canExecute(item, ticker) {
   return item.marketType === 'crypto' || (ticker?.marketStatus === 'Open' && ticker?.connectionStatus === 'live' && !ticker?.isStale)
@@ -14,13 +16,15 @@ function TradingAutomationMonitor() {
   const { currentUser } = useAuth()
   const [orders, setOrders] = useState([])
   const [positions, setPositions] = useState([])
+  const [alerts, setAlerts] = useState([])
   const [tickers, setTickers] = useState(new Map())
   const [notice, setNotice] = useState('')
   const activeSymbols = useRef(new Set())
 
   useEffect(() => subscribeToAllPendingOrders(currentUser.uid, setOrders, () => {}), [currentUser.uid])
   useEffect(() => subscribeToOpenPositions(currentUser.uid, setPositions, () => {}), [currentUser.uid])
-  const symbols = useMemo(() => [...new Set([...orders, ...positions].map((item) => item.symbol))], [orders, positions])
+  useEffect(() => subscribeToActivePriceAlerts(currentUser.uid, setAlerts, () => {}), [currentUser.uid])
+  const symbols = useMemo(() => [...new Set([...orders, ...positions, ...alerts].map((item) => item.symbol))], [alerts, orders, positions])
 
   useEffect(() => {
     const unsubscribe = symbols.map((symbol) => subscribeToTicker(symbol, (ticker) => setTickers((current) => new Map(current).set(symbol, ticker)), () => {}))
@@ -33,6 +37,7 @@ function TradingAutomationMonitor() {
       const ticker = tickers.get(symbol)
       const position = positions.find((item) => item.symbol === symbol)
       const symbolOrders = orders.filter((item) => item.symbol === symbol)
+      const symbolAlerts = alerts.filter((item) => item.symbol === symbol)
       if (!Number.isFinite(ticker?.price)) return
 
       let task = null
@@ -90,11 +95,21 @@ function TradingAutomationMonitor() {
         }
       }
 
+      if (!task) {
+        const alert = symbolAlerts.find((item) => canExecute(item, ticker) && (item.condition === 'above' ? ticker.price >= item.targetPrice : ticker.price <= item.targetPrice))
+        if (alert) {
+          task = async () => {
+            await triggerPriceAlert({ userId: currentUser.uid, alert, currentPrice: ticker.price, displaySymbol: marketBySymbol.get(symbol)?.displaySymbol || symbol })
+            message = `${symbol} price alert triggered.`
+          }
+        }
+      }
+
       if (!task) return
       activeSymbols.current.add(symbol)
       Promise.resolve(task()).then(() => { if (message) setNotice(message) }).catch(() => {}).finally(() => activeSymbols.current.delete(symbol))
     })
-  }, [currentUser.uid, orders, positions, symbols, tickers])
+  }, [alerts, currentUser.uid, orders, positions, symbols, tickers])
 
   useEffect(() => {
     if (!notice) return undefined

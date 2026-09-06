@@ -30,6 +30,11 @@ const Watchlist = lazy(() => import('./pages/Watchlist.jsx'))
 const Profile = lazy(() => import('./pages/Profile.jsx'))
 const Security = lazy(() => import('./pages/Security.jsx'))
 const Support = lazy(() => import('./pages/Support.jsx'))
+const Alerts = lazy(() => import('./pages/Alerts.jsx'))
+const Journal = lazy(() => import('./pages/Journal.jsx'))
+const RiskManagement = lazy(() => import('./pages/RiskManagement.jsx'))
+const Backtest = lazy(() => import('./pages/Backtest.jsx'))
+const Screener = lazy(() => import('./pages/Screener.jsx'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx'))
 const AdminUsers = lazy(() => import('./pages/admin/Users.jsx'))
 const AdminDeposits = lazy(() => import('./pages/admin/Deposits.jsx'))
@@ -70,6 +75,11 @@ function App() {
               <Route path="profile" element={<Profile />} />
               <Route path="security" element={<Security />} />
               <Route path="support" element={<Support />} />
+              <Route path="alerts" element={<Alerts />} />
+              <Route path="journal" element={<Journal />} />
+              <Route path="risk-management" element={<RiskManagement />} />
+              <Route path="backtest" element={<Backtest />} />
+              <Route path="screener" element={<Screener />} />
             </Route>
           </Route>
 

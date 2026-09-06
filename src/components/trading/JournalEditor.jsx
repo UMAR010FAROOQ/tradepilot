@@ -1,0 +1,16 @@
+import { useState } from 'react'
+import { BookPlus } from 'lucide-react'
+import { getJournalForTrade, saveJournalEntry } from '../../services/journalService.js'
+import { getFirestoreErrorMessage } from '../../utils/firestoreErrors.js'
+import Button from '../common/Button.jsx'
+import Input from '../common/Input.jsx'
+import Modal from '../common/Modal.jsx'
+
+function JournalEditor({ userId, trade, onSaved, label = 'Add Journal Note' }) {
+  const [open, setOpen] = useState(false), [loading, setLoading] = useState(false), [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ title: '', notes: '', tags: '', rating: '' }), [error, setError] = useState(''), [existing, setExisting] = useState(false)
+  const show = async () => { setOpen(true); setLoading(true); setError(''); try { const entry = await getJournalForTrade(userId, trade.id); setExisting(Boolean(entry)); setForm(entry ? { title: entry.title, notes: entry.notes, tags: entry.tags.join(', '), rating: entry.rating?.toString() || '' } : { title: '', notes: '', tags: '', rating: '' }) } catch (requestError) { setError(getFirestoreErrorMessage(requestError)) } finally { setLoading(false) } }
+  const save = async () => { setSaving(true); setError(''); try { await saveJournalEntry({ userId, tradeId: trade.id, symbol: trade.symbol, title: form.title, notes: form.notes, tags: form.tags.split(','), rating: form.rating }); setOpen(false); onSaved?.() } catch (requestError) { setError(getFirestoreErrorMessage(requestError)) } finally { setSaving(false) } }
+  return <><Button onClick={show} size="sm" variant="secondary"><BookPlus className="size-3.5" />{label}</Button><Modal description={`${trade.symbol} · linked trade remains immutable`} footer={<><Button disabled={saving} onClick={() => setOpen(false)} variant="ghost">Cancel</Button><Button disabled={saving || loading} onClick={save}>{saving ? 'Saving…' : existing ? 'Update Entry' : 'Save Entry'}</Button></>} isOpen={open} onClose={() => !saving && setOpen(false)} title={existing ? 'Edit Journal Entry' : 'Add Journal Entry'}>{loading ? <div className="h-40 animate-pulse rounded-lg bg-surface" /> : <div className="space-y-4"><Input label="Title" maxLength="120" onChange={(event) => setForm((value) => ({ ...value, title: event.target.value }))} value={form.title} /><div><label className="text-xs font-medium" htmlFor={`journal-${trade.id}`}>Notes</label><textarea className="mt-1.5 min-h-40 w-full resize-y rounded-lg border border-border bg-surface p-3 text-sm outline-none focus:border-accent" id={`journal-${trade.id}`} maxLength="5000" onChange={(event) => setForm((value) => ({ ...value, notes: event.target.value }))} value={form.notes} /><p className="mt-1 text-right text-[10px] text-muted">{form.notes.length}/5000</p></div><Input hint="Comma separated · maximum 5 tags" label="Tags" onChange={(event) => setForm((value) => ({ ...value, tags: event.target.value }))} value={form.tags} /><Input label="Trade Review Rating (optional)" max="5" min="1" onChange={(event) => setForm((value) => ({ ...value, rating: event.target.value }))} type="number" value={form.rating} />{error && <p className="text-xs text-negative">{error}</p>}</div>}</Modal></>
+}
+export default JournalEditor

@@ -9,6 +9,8 @@ import {
 } from 'firebase/firestore'
 import { auth, db } from './firebase.js'
 import { createServiceError } from '../utils/firestoreErrors.js'
+import { getTicker } from './marketService.js'
+import { DEFAULT_RISK_SETTINGS, normalizeRiskSettings, utcDayStart } from './riskService.js'
 
 function records(snapshot) {
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
@@ -19,12 +21,27 @@ async function orderedCollection(name) {
 }
 
 export async function getUsers() {
-  const [usersSnapshot, walletsSnapshot] = await Promise.all([
+  const [usersSnapshot, walletsSnapshot, settingsSnapshot, positionsSnapshot, tradesSnapshot] = await Promise.all([
     getDocs(collection(db, 'users')),
     getDocs(collection(db, 'wallets')),
+    getDocs(collection(db, 'riskSettings')),
+    getDocs(collection(db, 'positions')),
+    getDocs(collection(db, 'trades')),
   ])
   const wallets = new Map(records(walletsSnapshot).map((wallet) => [wallet.userId, wallet]))
-  return records(usersSnapshot).map((user) => ({ ...user, wallet: wallets.get(user.uid) || null }))
+  const settings = new Map(records(settingsSnapshot).map((item) => [item.userId, item]))
+  const positions = records(positionsSnapshot).filter((item) => item.status === 'open' && item.quantity > 0)
+  const trades = records(tradesSnapshot)
+  const symbols = [...new Set(positions.map((item) => item.symbol))]
+  const prices = new Map(await Promise.all(symbols.map(async (symbol) => {
+    try { return [symbol, (await getTicker(symbol)).price] } catch { return [symbol, null] }
+  })))
+  return records(usersSnapshot).map((user) => {
+    const userPositions = positions.filter((item) => item.userId === user.uid)
+    const exposure = userPositions.reduce((sum, item) => sum + item.quantity * (prices.get(item.symbol) || item.averageEntryPrice), 0)
+    const todayRealizedPnl = trades.filter((item) => item.userId === user.uid && item.side === 'SELL' && item.status === 'filled' && item.createdAt?.toDate?.() >= utcDayStart()).reduce((sum, item) => sum + (Number(item.realizedPnl) || 0), 0)
+    return { ...user, wallet: wallets.get(user.uid) || null, risk: { ...normalizeRiskSettings(settings.get(user.uid) || DEFAULT_RISK_SETTINGS), openPositions: userPositions.length, exposure, todayRealizedPnl } }
+  })
 }
 
 export const getDeposits = () => orderedCollection('deposits')

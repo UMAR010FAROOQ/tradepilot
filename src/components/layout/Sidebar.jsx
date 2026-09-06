@@ -14,6 +14,11 @@ import {
   Star,
   UserRound,
   WalletCards,
+  BellRing,
+  NotebookPen,
+  ShieldAlert,
+  FlaskConical,
+  ScanSearch,
 } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth.js'
@@ -27,10 +32,13 @@ const navigationGroups = [
     items: [
       { label: 'Dashboard', path: '/dashboard', icon: Gauge },
       { label: 'Markets', path: '/markets', icon: BarChart3 },
+      { label: 'Screener', path: '/screener', icon: ScanSearch },
       { label: 'Trade', path: '/trade', icon: ArrowLeftRight },
       { label: 'Active trades', path: '/active-trades', icon: CandlestickChart },
       { label: 'Portfolio', path: '/portfolio', icon: BriefcaseBusiness },
       { label: 'Analytics', path: '/analytics', icon: ChartNoAxesCombined },
+      { label: 'Risk management', path: '/risk-management', icon: ShieldAlert },
+      { label: 'Backtest', path: '/backtest', icon: FlaskConical },
       { label: 'Wallet', path: '/wallet', icon: WalletCards },
     ],
   },
@@ -39,6 +47,8 @@ const navigationGroups = [
     items: [
       { label: 'Transactions', path: '/transactions', icon: BookOpen },
       { label: 'Watchlist', path: '/watchlist', icon: Star },
+      { label: 'Alerts', path: '/alerts', icon: BellRing },
+      { label: 'Journal', path: '/journal', icon: NotebookPen },
     ],
   },
   {

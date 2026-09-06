@@ -41,6 +41,48 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time;
     }
 
+    function validRiskSettings(data, userId) {
+      return data.keys().hasAll(['userId', 'maxTradeRiskPercent', 'maxPositionPercent', 'dailyLossLimitPercent', 'maxOpenPositions', 'riskProtectionEnabled', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'maxTradeRiskPercent', 'maxPositionPercent', 'dailyLossLimitPercent', 'maxOpenPositions', 'riskProtectionEnabled', 'createdAt', 'updatedAt']) &&
+        data.userId == userId && data.maxTradeRiskPercent is number && data.maxTradeRiskPercent >= 0.1 && data.maxTradeRiskPercent <= 20 &&
+        data.maxPositionPercent is number && data.maxPositionPercent >= 1 && data.maxPositionPercent <= 100 &&
+        data.dailyLossLimitPercent is number && data.dailyLossLimitPercent >= 1 && data.dailyLossLimitPercent <= 50 &&
+        data.maxOpenPositions is int && data.maxOpenPositions >= 1 && data.maxOpenPositions <= 20 &&
+        data.riskProtectionEnabled is bool;
+    }
+
+    function validBacktest(data) {
+      return data.keys().hasAll(['userId', 'name', 'symbol', 'marketType', 'interval', 'strategy', 'strategyParameters', 'startingBalance', 'endingBalance', 'netProfit', 'returnPercent', 'totalTrades', 'winRate', 'profitFactor', 'maxDrawdown', 'totalFees', 'configuration', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'name', 'symbol', 'marketType', 'interval', 'strategy', 'strategyParameters', 'startingBalance', 'endingBalance', 'netProfit', 'returnPercent', 'totalTrades', 'winRate', 'profitFactor', 'maxDrawdown', 'totalFees', 'configuration', 'createdAt']) &&
+        data.userId == request.auth.uid && data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
+        validTradingSymbol(data.symbol) && data.marketType in ['crypto', 'forex'] && data.interval in ['1m', '5m', '15m', '1h', '4h', '1d'] &&
+        data.strategy in ['ma', 'rsi', 'breakout'] && data.strategyParameters is map &&
+        ((data.strategy == 'ma' && data.strategyParameters.keys().hasOnly(['fastPeriod', 'slowPeriod']) && data.strategyParameters.fastPeriod is int && data.strategyParameters.fastPeriod > 1 && data.strategyParameters.slowPeriod is int && data.strategyParameters.slowPeriod > data.strategyParameters.fastPeriod) ||
+         (data.strategy == 'rsi' && data.strategyParameters.keys().hasOnly(['rsiPeriod', 'oversoldLevel', 'exitLevel']) && data.strategyParameters.rsiPeriod is int && data.strategyParameters.rsiPeriod > 1 && data.strategyParameters.oversoldLevel is number && data.strategyParameters.oversoldLevel > 0 && data.strategyParameters.exitLevel is number && data.strategyParameters.exitLevel > data.strategyParameters.oversoldLevel && data.strategyParameters.exitLevel <= 100) ||
+         (data.strategy == 'breakout' && data.strategyParameters.keys().hasOnly(['lookbackPeriod', 'exitLookback']) && data.strategyParameters.lookbackPeriod is int && data.strategyParameters.lookbackPeriod > 1 && data.strategyParameters.exitLookback is int && data.strategyParameters.exitLookback > 1)) &&
+        data.startingBalance is number && data.startingBalance > 0 && data.endingBalance is number && data.endingBalance >= 0 &&
+        data.netProfit is number && data.returnPercent is number && data.returnPercent >= -100 &&
+        data.totalTrades is int && data.totalTrades >= 0 && data.totalTrades <= 500 && data.winRate is number && data.winRate >= 0 && data.winRate <= 100 &&
+        (data.profitFactor == null || (data.profitFactor is number && data.profitFactor >= 0)) && data.maxDrawdown is number && data.maxDrawdown >= 0 && data.maxDrawdown <= 100 && data.totalFees is number && data.totalFees >= 0 &&
+        data.configuration is map && data.configuration.keys().hasOnly(['startingBalance', 'sizingMode', 'positionSize', 'slippage', 'stopLossPercent', 'takeProfitPercent']) &&
+        data.configuration.startingBalance == data.startingBalance && data.configuration.sizingMode in ['percent', 'fixed'] && data.configuration.positionSize is number && data.configuration.positionSize > 0 &&
+        (data.configuration.sizingMode != 'percent' || data.configuration.positionSize <= 100) && data.configuration.slippage is number && data.configuration.slippage >= 0 && data.configuration.slippage <= 5 &&
+        (data.configuration.stopLossPercent == null || (data.configuration.stopLossPercent is number && data.configuration.stopLossPercent > 0 && data.configuration.stopLossPercent <= 100)) &&
+        (data.configuration.takeProfitPercent == null || (data.configuration.takeProfitPercent is number && data.configuration.takeProfitPercent > 0 && data.configuration.takeProfitPercent <= 100)) && data.createdAt == request.time;
+    }
+
+    function validScannerPreset(data) {
+      return data.keys().hasAll(['userId', 'name', 'mode', 'interval', 'marketType', 'trend', 'minChange', 'minMomentum', 'minVolatility', 'sortBy', 'sortDirection', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'name', 'mode', 'interval', 'marketType', 'trend', 'minChange', 'minMomentum', 'minVolatility', 'sortBy', 'sortDirection', 'createdAt', 'updatedAt']) &&
+        data.userId == request.auth.uid && data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
+        data.mode in ['momentum', 'trend', 'volatility', 'breakout', 'movers', 'watchlist'] && data.interval in ['15m', '1h', '4h', '1d'] &&
+        data.marketType in ['all', 'crypto', 'forex', 'gold'] && data.trend in ['all', 'Bullish', 'Bearish', 'Neutral'] &&
+        (data.minChange == null || (data.minChange is number && data.minChange >= -100 && data.minChange <= 100)) &&
+        (data.minMomentum == null || (data.minMomentum is number && data.minMomentum >= -100 && data.minMomentum <= 100)) &&
+        (data.minVolatility == null || (data.minVolatility is number && data.minVolatility >= 0 && data.minVolatility <= 100)) &&
+        data.sortBy in ['price', 'changePercent', 'momentum', 'volatility', 'breakoutDistance', 'scannerScore'] && data.sortDirection in ['asc', 'desc'];
+    }
+
     function validPakistaniPaymentMethod(data) {
       return data.method in ['JazzCash', 'Easypaisa', 'SadaPay', 'NayaPay', 'Pakistani Bank Account'] &&
         ((data.method in ['JazzCash', 'Easypaisa'] && data.paymentCategory == 'Mobile wallet') ||
@@ -67,6 +109,28 @@ service cloud.firestore {
           getAfter(/databases/$(database)/documents/withdrawals/$(data.referenceId)).data.userId == data.userId &&
           ((data.type == 'withdrawal_approved' && getAfter(/databases/$(database)/documents/withdrawals/$(data.referenceId)).data.status == 'approved') ||
            (data.type == 'withdrawal_rejected' && getAfter(/databases/$(database)/documents/withdrawals/$(data.referenceId)).data.status == 'rejected'))));
+    }
+
+    function validPriceAlertNotification(notificationId) {
+      let data = request.resource.data;
+      let alertBefore = get(/databases/$(database)/documents/priceAlerts/$(data.referenceId)).data;
+      let alertAfter = getAfter(/databases/$(database)/documents/priceAlerts/$(data.referenceId)).data;
+      return hasExactFields(['userId', 'type', 'title', 'message', 'read', 'createdAt', 'referenceType', 'referenceId']) &&
+        data.userId == request.auth.uid && data.type == 'price_alert' &&
+        data.referenceType == 'price_alert' && data.title == 'Price Alert Triggered' &&
+        data.message is string && data.message.size() > 0 && data.message.size() <= 240 &&
+        data.read == false && data.createdAt == request.time &&
+        alertBefore.userId == request.auth.uid && alertBefore.status == 'active' &&
+        alertAfter.status == 'triggered' && alertAfter.notificationId == notificationId;
+    }
+
+    function validTags(tags) {
+      return tags is list && tags.size() <= 5 &&
+        (tags.size() < 1 || (tags[0] is string && tags[0].size() > 0 && tags[0].size() <= 30)) &&
+        (tags.size() < 2 || (tags[1] is string && tags[1].size() > 0 && tags[1].size() <= 30)) &&
+        (tags.size() < 3 || (tags[2] is string && tags[2].size() > 0 && tags[2].size() <= 30)) &&
+        (tags.size() < 4 || (tags[3] is string && tags[3].size() > 0 && tags[3].size() <= 30)) &&
+        (tags.size() < 5 || (tags[4] is string && tags[4].size() > 0 && tags[4].size() <= 30));
     }
 
     function validCompletedTransaction(transactionId) {
@@ -629,6 +693,32 @@ service cloud.firestore {
         (ownsDocument(userId) && isActiveUser() && validWalletTradeUpdate(userId));
     }
 
+    match /riskSettings/{userId} {
+      allow get: if (ownsDocument(userId) && isActiveUser()) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if ownsDocument(userId) && isActiveUser() &&
+        validRiskSettings(request.resource.data, userId) &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if ownsDocument(userId) && isActiveUser() &&
+        validRiskSettings(request.resource.data, userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['maxTradeRiskPercent', 'maxPositionPercent', 'dailyLossLimitPercent', 'maxOpenPositions', 'riskProtectionEnabled', 'updatedAt']) &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+    }
+
+    match /backtests/{backtestId} {
+      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow create: if isActiveUser() && validBacktest(request.resource.data);
+      allow delete: if isActiveUser() && resource.data.userId == request.auth.uid;
+    }
+
+    match /scannerPresets/{presetId} {
+      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow create: if isActiveUser() && validScannerPreset(request.resource.data) && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid && validScannerPreset(request.resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']) && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if isActiveUser() && resource.data.userId == request.auth.uid;
+    }
+
     match /positions/{positionId} {
       allow read: if (isActiveUser() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isActiveUser() && validPositionCreate(positionId);
@@ -656,10 +746,76 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
-      allow create: if isAdmin() && validFundingNotification();
+      allow create: if (isAdmin() && validFundingNotification()) ||
+        (isActiveUser() && validPriceAlertNotification(notificationId));
       allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
         resource.data.read == false && request.resource.data.read == true;
+    }
+
+    match /priceAlerts/{alertId} {
+      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow create: if isActiveUser() &&
+        hasExactFields(['userId', 'symbol', 'marketType', 'condition', 'targetPrice', 'status', 'createdAt', 'triggeredAt', 'cancelledAt', 'notificationId']) &&
+        request.resource.data.userId == request.auth.uid && validTradingSymbol(request.resource.data.symbol) &&
+        request.resource.data.marketType in ['crypto', 'forex'] && request.resource.data.condition in ['above', 'below'] &&
+        request.resource.data.targetPrice is number && request.resource.data.targetPrice > 0 &&
+        request.resource.data.status == 'active' && request.resource.data.createdAt == request.time &&
+        request.resource.data.triggeredAt == null && request.resource.data.cancelledAt == null && request.resource.data.notificationId == null;
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
+        ((resource.data.status == 'active' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']) && request.resource.data.status == 'cancelled' && request.resource.data.cancelledAt == request.time) ||
+         (resource.data.status == 'active' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'triggeredAt', 'notificationId']) && request.resource.data.status == 'triggered' && request.resource.data.triggeredAt == request.time &&
+          getAfter(/databases/$(database)/documents/notifications/$(request.resource.data.notificationId)).data.type == 'price_alert' &&
+          getAfter(/databases/$(database)/documents/notifications/$(request.resource.data.notificationId)).data.referenceId == alertId));
+    }
+
+    match /tradeJournal/{journalId} {
+      allow get: if isActiveUser() && journalId.matches(request.auth.uid + '_.*');
+      allow list: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow create: if isActiveUser() &&
+        hasExactFields(['userId', 'tradeId', 'symbol', 'title', 'notes', 'tags', 'rating', 'createdAt', 'updatedAt']) &&
+        journalId == request.auth.uid + '_' + request.resource.data.tradeId && request.resource.data.userId == request.auth.uid &&
+        get(/databases/$(database)/documents/trades/$(request.resource.data.tradeId)).data.userId == request.auth.uid &&
+        request.resource.data.symbol == get(/databases/$(database)/documents/trades/$(request.resource.data.tradeId)).data.symbol &&
+        request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120 &&
+        request.resource.data.notes is string && request.resource.data.notes.size() <= 5000 && validTags(request.resource.data.tags) &&
+        (request.resource.data.rating == null || (request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5)) &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'notes', 'tags', 'rating', 'updatedAt']) &&
+        request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120 &&
+        request.resource.data.notes is string && request.resource.data.notes.size() <= 5000 && validTags(request.resource.data.tags) &&
+        (request.resource.data.rating == null || (request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5)) &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if isActiveUser() && resource.data.userId == request.auth.uid;
+    }
+
+    match /marketNotes/{noteId} {
+      allow get: if isActiveUser() && noteId.matches(request.auth.uid + '_.*');
+      allow list: if false;
+      allow create: if isActiveUser() && noteId == request.auth.uid + '_' + request.resource.data.symbol &&
+        hasExactFields(['userId', 'symbol', 'notes', 'createdAt', 'updatedAt']) && request.resource.data.userId == request.auth.uid &&
+        validTradingSymbol(request.resource.data.symbol) && request.resource.data.notes is string && request.resource.data.notes.size() <= 5000 &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notes', 'updatedAt']) &&
+        request.resource.data.notes is string && request.resource.data.notes.size() <= 5000 && request.resource.data.updatedAt == request.time;
+      allow delete: if isActiveUser() && resource.data.userId == request.auth.uid;
+    }
+
+    match /orderPresets/{presetId} {
+      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+      allow create: if isActiveUser() && hasExactFields(['userId', 'name', 'riskPercent', 'stopLossPercent', 'takeProfitRatio', 'trailingStopPercent', 'createdAt', 'updatedAt']) &&
+        request.resource.data.userId == request.auth.uid && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80 &&
+        request.resource.data.riskPercent is number && request.resource.data.riskPercent > 0 && request.resource.data.riskPercent <= 10 &&
+        (request.resource.data.stopLossPercent == null || (request.resource.data.stopLossPercent is number && request.resource.data.stopLossPercent > 0 && request.resource.data.stopLossPercent <= 100)) &&
+        (request.resource.data.takeProfitRatio == null || (request.resource.data.takeProfitRatio is number && request.resource.data.takeProfitRatio > 0)) &&
+        (request.resource.data.trailingStopPercent == null || (request.resource.data.trailingStopPercent is number && request.resource.data.trailingStopPercent > 0 && request.resource.data.trailingStopPercent <= 25)) &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if isActiveUser() && resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']) &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80 && request.resource.data.updatedAt == request.time;
+      allow delete: if isActiveUser() && resource.data.userId == request.auth.uid;
     }
 
     match /deposits/{depositId} {

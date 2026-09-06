@@ -39,6 +39,15 @@ const firestoreErrorMessages = {
   'trading/break-even-unavailable': 'The current price must be above break even.',
   'trading/invalid-targets': 'Check the take-profit targets and allocations.',
   'trading/invalid-trailing-stop': 'Trailing stop must be between 0.1% and 25%.',
+  'alert/invalid-condition': 'Choose Price Above or Price Below.',
+  'alert/invalid-price': 'Enter a valid target price.',
+  'alert/missing': 'This price alert no longer exists.',
+  'alert/inactive': 'This price alert is no longer active.',
+  'journal/invalid-title': 'Enter a journal title up to 120 characters.',
+  'journal/notes-too-long': 'Journal notes cannot exceed 5,000 characters.',
+  'journal/invalid-tags': 'Use up to five tags of 30 characters each.',
+  'journal/invalid-rating': 'Trade Review Rating must be between 1 and 5.',
+  'notes/too-long': 'Market notes cannot exceed 5,000 characters.',
   'forex/live-required': 'Live Forex data is required to place a simulated Forex order.',
   'forex/market-closed': 'Forex market is currently closed.',
   'forex/stale-price': 'The latest Forex price is stale. Please try again later.',
@@ -47,6 +56,7 @@ const firestoreErrorMessages = {
 }
 
 export function getFirestoreErrorMessage(error) {
+  if (error?.code === 'risk/blocked' || error?.code === 'risk/invalid-settings') return error.message
   return (
     firestoreErrorMessages[error?.code] ||
     'Unable to complete the request right now. Please try again.'
