@@ -12,7 +12,7 @@ const variants = {
 }
 
 const sizes = { sm: 'size-8', md: 'size-9', lg: 'size-10' }
-const iconSizes = { sm: 'size-4', md: 'size-5', lg: 'size-[22px]' }
+const iconSizes = { xs: 'size-3.5', sm: 'size-4', md: 'size-5', lg: 'size-[22px]' }
 
 function IconButton({ icon: Icon, iconSize = 'md', children, 'aria-label': ariaLabel, title, disabled, loading = false, size = 'md', variant = 'default', className, ...props }) {
   return <button aria-label={ariaLabel} className={cn('relative inline-grid shrink-0 cursor-pointer place-items-center rounded-lg outline-none transition disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas', sizes[size], variants[variant], className)} disabled={disabled || loading} title={title || ariaLabel} type="button" {...props}>{loading ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Icon aria-hidden="true" className={iconSizes[iconSize]} strokeWidth={2.4} />}{children}</button>
