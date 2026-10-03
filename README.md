@@ -3,21 +3,22 @@
 
   # TradePilot
 
-  **A professional, dark-first workspace for simulated Crypto, Forex, and Gold trading.**
+  **TradePilot is a production-style simulated trading platform for Crypto, Forex, and Gold, built with React, Firebase, live market data, advanced risk controls, backtesting, analytics, and CI/CD.**
 
-  Explore live public market data, practise disciplined execution, review portfolio performance,
-  and test trading ideas—without sending an order to a real exchange or broker.
+  [**Live Demo**](https://tradepilot-3591a.web.app) · [**Repository**](https://github.com/UMAR010FAROOQ/tradepilot)
 
   [![CI](https://github.com/UMAR010FAROOQ/tradepilot/actions/workflows/ci.yml/badge.svg)](https://github.com/UMAR010FAROOQ/tradepilot/actions/workflows/ci.yml)
   ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
   ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
   ![Firebase](https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?logo=firebase&logoColor=black)
   ![Vitest](https://img.shields.io/badge/Tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
+
+  > **Simulation only:** TradePilot does not execute real-money trades.
 </div>
 
 ---
 
-## Product preview
+## Product Preview
 
 <picture>
   <img src="./docs/screenshots/landing.png" alt="TradePilot landing page on desktop" width="100%" />
@@ -31,36 +32,64 @@
   </p>
 </details>
 
-## What TradePilot demonstrates
+## Key Highlights
 
-TradePilot is a portfolio project built around the workflows of a modern multi-asset trading product. It combines a compact financial interface with real public market data, a Firebase-backed account system, deterministic simulations, analytics, and guarded administration.
+- Live Crypto data through Binance public REST and shared WebSocket subscriptions.
+- Live Forex and XAU/USD data through Twelve Data and a secure Cloudflare Worker.
+- Simulated market and limit orders with atomic wallet, position, and trade updates.
+- Stop loss, up to three take-profit targets, trailing stop, break-even, and reduce-only exits.
+- Risk controls for trade risk, position exposure, daily loss, and open-position limits.
+- Strategy backtesting, historical market replay, and no-lookahead execution.
+- Market screener, scanner presets, watchlists, price alerts, analytics, journal, and CSV export.
+- Firebase Authentication, email verification, Firestore Security Rules, and role-gated administration.
+- 59 deterministic unit and component tests, plus 7 Firestore Rules emulator cases.
+- GitHub Actions validation and Firebase Hosting deployment from `main`.
 
-The project deliberately separates **market observation** from **trade execution**: quotes are real public data, while balances, orders, positions, and performance are simulated.
+## My Contribution
 
-### Trading workspace
+I designed and developed TradePilot end-to-end, including the frontend architecture, Firebase authentication and Firestore data model, simulated trading engine, live market-data integrations, risk-management layer, backtesting system, market screener, admin operations, automated testing, and CI/CD pipeline.
 
-- Live Crypto quotes from Binance public endpoints.
-- Forex and XAU/USD quotes through a Cloudflare Worker proxy.
-- Interactive financial charts powered by Lightweight Charts.
-- Simulated market and limit orders with long-only position accounting.
-- Reduce-only exits, protective orders, pending orders, and live unrealized P/L.
-- Active-trade management, transaction history, and CSV export.
+- Designed the React/Vite architecture, responsive application shells, and reusable UI system.
+- Built Firebase Authentication, live Firestore data flows, transactions, and strict Security Rules.
+- Integrated shared Binance WebSocket data and a Twelve Data-compatible Cloudflare proxy.
+- Implemented simulated execution, advanced order protection, position accounting, and risk validation.
+- Built backtesting, replay, screener, analytics, alerts, portfolio, and trading-journal workflows.
+- Built admin operations, audit logs, feature flags, maintenance controls, and funding review flows.
+- Added deterministic tests, GitHub Actions validation, and Firebase Hosting deployment.
 
-### Market and performance intelligence
+## What This Project Demonstrates
 
-- Markets, watchlists, price alerts, and a configurable market screener.
-- Strategy backtesting and historical market replay.
-- Portfolio, equity, realized/unrealized P/L, and trading-performance analytics.
-- Risk limits, position-sizing tools, exposure monitoring, and risk/reward calculations.
-- Trading journal and reusable order/scanner presets.
+- Frontend architecture for a complex, stateful React application.
+- Real-time market-data integration and provider abstraction.
+- Secure third-party API proxy design and secret isolation.
+- Firebase identity, authorization, Firestore transactions, and rules design.
+- Financial calculations, risk validation, position accounting, and analytics.
+- Deterministic strategy backtesting and historical replay.
+- Role-based admin operations and platform controls.
+- Automated testing, CI/CD, production builds, and environment management.
 
-### Account and administration
+## Core Features
 
-- Firebase email/password authentication with email verification.
-- Protected user routes and role-gated administration.
-- Profiles, wallets, notifications, and account-security workflows.
-- Manual deposit and withdrawal request flows for supported Pakistani payment methods.
-- Admin review tools for users, funding requests, trades, platform settings, and audit logs.
+### Trading Workspace
+
+- Live multi-asset market overview and interactive Lightweight Charts.
+- Long-only simulated market and limit orders with pending-order management.
+- Active positions, realized/unrealized P/L, portfolio equity, and transaction history.
+- Position sizing, protective exits, multi-target take profit, trailing stop, and break-even controls.
+
+### Market and Performance Intelligence
+
+- Markets, watchlists, alerts, market screener, and saved scanner presets.
+- Moving-average, RSI, volatility, momentum, ATR, and breakout analysis.
+- Backtesting with fees, adverse slippage, next-candle execution, equity curves, and drawdown.
+- Performance analytics, risk dashboard, journal, order presets, and CSV exports.
+
+### Account and Administration
+
+- Email/password authentication, email verification, profiles, notifications, and security workflows.
+- Manual deposit and withdrawal requests for supported Pakistani payment methods.
+- Role-gated user, funding, trade, transaction, settings, and audit-log operations.
+- Account suspension, maintenance mode, and platform-level feature controls.
 
 ## Architecture
 
@@ -68,43 +97,64 @@ The project deliberately separates **market observation** from **trade execution
 flowchart LR
     UI[React 19 SPA] --> AUTH[Firebase Authentication]
     UI --> DB[(Cloud Firestore)]
-    UI --> BINANCE[Binance public market data]
-    UI --> WORKER[Cloudflare Worker proxy]
+    UI --> BINANCE[Binance REST / WebSocket]
+    UI --> WORKER[Cloudflare Worker]
     WORKER --> TWELVE[Twelve Data]
     CI[GitHub Actions] --> CHECKS[Lint · Vitest · Build]
     CHECKS --> HOSTING[Firebase Hosting]
 ```
 
-| Layer | Technology | Responsibility |
-| --- | --- | --- |
-| Interface | React 19, React Router, Tailwind CSS | Responsive routes, layouts, components, and stateful workflows |
-| Charting | Lightweight Charts | Market charts and trading visualizations |
-| Identity | Firebase Authentication | Email/password identity and verification |
-| Data | Cloud Firestore | Profiles, wallets, simulated orders, positions, analytics, and admin records |
-| Crypto data | Binance public HTTP/WebSocket APIs | Public Crypto pricing and updates |
-| Forex data | Cloudflare Worker + Twelve Data | Server-side credential isolation for Forex and XAU/USD quotes |
-| Quality | ESLint, Vitest, Firebase Rules Unit Testing | Static analysis, deterministic unit coverage, and rules validation |
-| Delivery | GitHub Actions, Firebase Hosting | Validated production builds and Hosting deployment |
+TradePilot deliberately separates **market observation** from **trade execution**: quotes use real public market data, while balances, orders, positions, and performance remain simulated. See [ARCHITECTURE.md](./ARCHITECTURE.md) for subsystem and trust-boundary details.
 
-Read [ARCHITECTURE.md](./ARCHITECTURE.md) for subsystem boundaries, persistence, and security decisions.
+## Engineering Decisions
 
-## Engineering highlights
+### Firebase-first architecture
 
-- **Provider abstraction:** Crypto, Forex, and metals can use different upstream providers without coupling the UI to provider-specific response formats.
-- **Deterministic financial logic:** position averaging, break-even prices, realized P/L, risk/reward, and backtesting calculations live in testable utilities.
-- **Security-first client design:** Firebase rules remain the authorization boundary; role and account-state changes update protected routes in real time.
-- **Secret isolation:** the Twelve Data credential stays inside Cloudflare and never enters Vite browser variables.
-- **Release safety:** pull requests and `main` builds run lint, deterministic tests, and a production build before Hosting deployment.
-- **Honest simulation boundary:** no broker integration, custody, real-money execution, or misleading “live trading” behavior.
+Firebase Authentication, Firestore, Security Rules, and Hosting provide a serverless, Spark-compatible foundation. Firestore transactions coordinate sensitive wallet, position, order, and trade state changes.
 
-## Getting started
+### Secure Forex proxy
+
+The Twelve Data API key exists only as a Cloudflare Worker secret. The browser receives market data through the trusted proxy URL and never receives the provider credential.
+
+### Shared and rate-aware market data
+
+Crypto updates share Binance WebSocket subscriptions across consumers. Forex subscriptions use cached data, bounded polling batches, and a rotating cursor to avoid unnecessary provider requests.
+
+### Client-side simulation boundary
+
+Limit orders, alerts, SL/TP, trailing stops, break-even actions, and trading automation intentionally run client-side while TradePilot is open. Real-money execution would require a trusted backend and a new security review.
+
+### Deliberate security deployment
+
+Validated `main` commits deploy Firebase Hosting automatically. Firestore Rules and indexes remain a separate manual deployment so authorization changes are never coupled to a frontend release.
+
+## Tech Stack
+
+| Category | Technologies |
+| --- | --- |
+| Frontend | React 19, React Router, Vite, Tailwind CSS, Lightweight Charts, lucide-react |
+| Backend / Platform | Firebase Authentication, Cloud Firestore, Firebase Hosting, Firestore Security Rules |
+| Market Data | Binance public REST/WebSocket, Twelve Data, Cloudflare Workers |
+| Testing / DevOps | Vitest, ESLint, Firebase Rules Unit Testing, Firebase CLI, GitHub Actions |
+
+## Engineering Highlights
+
+- Shared Binance stream management with subscriber lifecycle and reconnect handling.
+- Batched, rate-aware Forex polling with caching and provider-neutral market services.
+- Atomic Firestore transactions for simulated execution and funding administration.
+- Rules-enforced wallet transitions, immutable trade history, and admin-only platform operations.
+- Centralized financial math for fees, realized P/L, weighted entries, break-even, and sizing.
+- Configurable risk validation that rechecks pending BUY orders before execution.
+- Completed-candle signals with next-candle fills to prevent lookahead bias in backtests.
+- Modular service architecture with responsive, semantic, and keyboard-accessible UI components.
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 24
-- npm
-- A Firebase web app with Authentication and Firestore configured
-- Firebase CLI and Java only when running Firestore emulator tests
+- Node.js 24 and npm.
+- A Firebase web app with Authentication and Firestore configured.
+- Firebase CLI and Java only for Firestore emulator tests.
 
 ### Installation
 
@@ -112,27 +162,15 @@ Read [ARCHITECTURE.md](./ARCHITECTURE.md) for subsystem boundaries, persistence,
 git clone https://github.com/UMAR010FAROOQ/tradepilot.git
 cd tradepilot
 npm ci
-```
-
-Create a local environment file from the documented template:
-
-```bash
 cp .env.example .env.local
-```
-
-On PowerShell, use `Copy-Item .env.example .env.local` instead.
-
-Add the public Firebase web configuration to `.env.local`, then start Vite:
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+On PowerShell, replace the copy command with `Copy-Item .env.example .env.local`. Add the public Firebase web configuration to `.env.local`, then open [http://localhost:5173](http://localhost:5173).
 
-## Environment configuration
+## Environment Configuration
 
-All `VITE_` values are embedded in browser assets and must be safe to expose.
+Every `VITE_` value is embedded in browser assets and must be safe to expose.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -144,83 +182,88 @@ All `VITE_` values are embedded in browser assets and must be safe to expose.
 | `VITE_FIREBASE_APP_ID` | Yes | Firebase web-app identifier |
 | `VITE_FOREX_API_BASE_URL` | Optional | Trusted Twelve Data-compatible proxy URL |
 | `VITE_SUPPORT_EMAIL` | Optional | Public support address |
-| `VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_APP_ENV` | Optional | Public build metadata shown in support diagnostics |
+| `VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_APP_ENV` | Optional | Public build and diagnostic metadata |
 
 The template also documents optional public receiving instructions for supported manual funding methods.
 
 > Never place `TWELVE_DATA_API_KEY`, service-account JSON, passwords, PINs, OTPs, or private payment credentials in a `VITE_` variable.
 
-## Available commands
+## Available Commands
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the local Vite development server |
+| `npm run dev` | Start the Vite development server |
 | `npm run build` | Create an optimized production build |
 | `npm run preview` | Preview the production build locally |
-| `npm run lint` | Run ESLint across the project |
+| `npm run lint` | Run ESLint |
 | `npm test` | Run Vitest in watch mode |
-| `npm run test:run` | Run the fast deterministic test suite once |
-| `npm run test:rules` | Run Firestore rules tests against the local emulator |
-| `npm run validate` | Run lint, unit tests, and the production build |
+| `npm run test:run` | Run the deterministic unit/component suite |
+| `npm run test:rules` | Run Rules tests against the Firestore emulator |
+| `npm run validate` | Run lint, deterministic tests, and production build |
 
-The rules suite uses `firebase emulators:exec` and does not connect to production Firestore.
+## Testing and Release Pipeline
 
-## Project structure
+The fast suite contains **59 deterministic automated tests** covering trading math, financial analytics, indicators, risk limits, scanner analysis, backtest mechanics, CSV safety, and component smoke behavior. A separate **7-case Firestore Rules suite** verifies profile isolation, wallet protection, immutable trades, role/status protection, restricted admin data, and admin-only platform settings.
+
+Every pull request and push to `main` runs:
+
+1. Locked dependency installation with `npm ci`.
+2. ESLint validation.
+3. The 59-test Vitest suite.
+4. A clean Vite production build.
+
+The production workflow repeats `npm run validate` before deploying the Firebase Hosting live channel. Rules tests require the Firebase CLI and Java and run only against the local emulator.
+
+Firestore Rules and indexes remain an intentional manual release:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+See [GITHUB_DEPLOYMENT.md](./GITHUB_DEPLOYMENT.md) for repository variables, deployment credentials, and branch-protection setup.
+
+## Project Structure
 
 ```text
 src/
 ├── components/     Reusable UI, layout, chart, and trading components
 ├── config/         Build metadata and application configuration
-├── context/        Authentication, wallet, and platform state
+├── context/        Authentication, wallet, risk, and platform state
 ├── hooks/          Shared React hooks
 ├── layouts/        Public, authenticated, and admin shells
 ├── pages/          Route-level product screens
 ├── services/       Firebase, market-data, trading, and analytics services
 ├── styles/         Global Tailwind theme and design tokens
-└── utils/          Pure financial, CSV, indicator, and backtest utilities
+└── utils/          Financial, CSV, indicator, scanner, and backtest utilities
 
 tests/
 ├── firestore-rules/  Emulator-backed authorization tests
 └── *.test.*          Deterministic unit and component smoke tests
 ```
 
-## Testing and release pipeline
+## Security Model
 
-Every pull request and push to `main` runs the CI quality gate on Node.js 24:
+- Firebase Authentication provides identity and email-verification state.
+- Firestore Rules enforce ownership, active-account checks, and role-based authorization.
+- Users cannot directly edit wallet balances or mutate filled trade records.
+- Platform settings, private admin notes, audit logs, and funding decisions are admin-only.
+- Role changes, account status, and protected routes respond to live profile state.
+- The Twelve Data key remains in a Cloudflare Worker secret; no provider secrets enter frontend code.
+- Sensitive credentials are excluded from exports, build metadata, and source control.
+- Client-side automation works only while the authenticated application is open.
 
-1. Install the locked dependency graph with `npm ci`.
-2. Run ESLint.
-3. Run deterministic Vitest tests.
-4. Produce a clean Vite production build.
-
-The production workflow repeats validation before deploying **Firebase Hosting only**. Firestore rules and indexes remain an intentional manual deployment:
-
-```bash
-firebase deploy --only firestore:rules,firestore:indexes
-```
-
-Preview deployments are intentionally disabled until the project has an isolated preview Firebase backend. See [GITHUB_DEPLOYMENT.md](./GITHUB_DEPLOYMENT.md) for the complete release setup.
-
-## Security model
-
-- Firebase web configuration is public by design; Firestore Rules enforce authorization.
-- Normal users cannot directly mutate administrative records, wallet balances, or immutable trade history.
-- Admin role and account status are evaluated by guarded routes and live profile state.
-- Provider secrets stay outside the browser.
-- Sensitive credentials are excluded from logs, exports, build metadata, and source control.
-
-This remains a client-first Firebase Spark architecture. It does not provide the trusted custody, server-side execution, background processing, audit guarantees, or regulatory controls required for a real-money trading system.
+TradePilot's client-first Firebase architecture does not provide the custody, trusted execution, background processing, or regulatory controls required for real-money trading.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow, quality expectations, and pull-request guidance.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow, quality expectations, and pull-request guidance.
 
 ## Disclaimer
 
-TradePilot is educational simulation software. It does not transmit orders to an exchange or broker, does not provide investment advice, and is not suitable for real-money execution.
+TradePilot is an educational and portfolio project for simulated trading. It is not a broker, exchange, investment service, or financial-advice platform. No real-money trades are executed.
 
 ---
 
 <div align="center">
-  Built as a full-stack product-engineering portfolio project focused on financial UX, deterministic simulation, and release safety.
+  Built as a personal software-engineering portfolio project focused on financial UX, deterministic simulation, security boundaries, and release safety.
 </div>
