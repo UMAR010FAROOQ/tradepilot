@@ -1,19 +1,20 @@
 <div align="center">
   <img src="./public/favicon.svg" alt="TradePilot logo" width="72" height="72" />
-
-  # TradePilot
-
-  **TradePilot is a production-style simulated trading platform for Crypto, Forex, and Gold, built with React, Firebase, live market data, advanced risk controls, backtesting, analytics, and CI/CD.**
-
-  [**Live Demo**](https://tradepilot-3591a.web.app) · [**Repository**](https://github.com/UMAR010FAROOQ/tradepilot)
-
-  [![CI](https://github.com/UMAR010FAROOQ/tradepilot/actions/workflows/ci.yml/badge.svg)](https://github.com/UMAR010FAROOQ/tradepilot/actions/workflows/ci.yml)
-  ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-  ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
-  ![Firebase](https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?logo=firebase&logoColor=black)
-  ![Vitest](https://img.shields.io/badge/Tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
-
-  > **Simulation only:** TradePilot does not execute real-money trades.
+  <h1>TradePilot</h1>
+  <p><strong>TradePilot is a production-style simulated trading platform for Crypto, Forex, and Gold, built with React, Firebase, live market data, advanced risk controls, backtesting, analytics, and CI/CD.</strong></p>
+  <p>
+    <a href="https://tradepilot-3591a.web.app"><strong>Live Demo</strong></a>
+    ·
+    <a href="https://github.com/UMAR010FAROOQ/tradepilot"><strong>Repository</strong></a>
+  </p>
+  <p>
+    <a href="https://github.com/UMAR010FAROOQ/tradepilot/actions/workflows/ci.yml"><img src="https://github.com/UMAR010FAROOQ/tradepilot/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+    <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&amp;logoColor=white" alt="React 19" />
+    <img src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&amp;logoColor=white" alt="Vite 8" />
+    <img src="https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?logo=firebase&amp;logoColor=black" alt="Firebase Authentication and Firestore" />
+    <img src="https://img.shields.io/badge/Tested%20with-Vitest-6E9F18?logo=vitest&amp;logoColor=white" alt="Tested with Vitest" />
+  </p>
+  <p><strong>Simulation only:</strong> TradePilot does not execute real-money trades.</p>
 </div>
 
 ---
