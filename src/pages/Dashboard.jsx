@@ -129,7 +129,7 @@ function Dashboard() {
         description="A concise view of your account and market activity."
         eyebrow="Overview"
         title={`Good morning${firstName ? `, ${firstName}` : ''}`}
-        titleClassName="text-accent"
+        titleClassName="bg-gradient-to-r from-accent to-positive bg-clip-text text-transparent"
       />
 
       {walletError && (

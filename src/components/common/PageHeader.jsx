@@ -9,7 +9,7 @@ function PageHeader({ eyebrow, title, description, actions, titleClassName }) {
             {eyebrow}
           </p>
         )}
-        <h1 className={cn('text-2xl font-semibold tracking-tight text-foreground sm:text-3xl', titleClassName)}>
+        <h1 className={cn('text-2xl font-semibold tracking-tight sm:text-3xl', titleClassName || 'text-foreground')}>
           {title}
         </h1>
         {description && <p className="mt-1.5 text-sm text-muted">{description}</p>}
